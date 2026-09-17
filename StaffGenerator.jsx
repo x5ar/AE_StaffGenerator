@@ -8,11 +8,13 @@ See THIRD_PARTY_NOTICES.md and the OFL notice next to the embedded glyph data.
 */
 // #target aftereffects
 (function (thisObj) {
-    var TOOL_VERSION = "1.0.0";
+    var TOOL_VERSION = "1.1.0";
     var SCORE_VERSION = 1;
     var DEBUG = false;
     var TICKS_PER_QUARTER = 480;
-    var MEASURE_TICKS = 1920;
+    var DEFAULT_TIME_SIGNATURE = { numerator: 4, denominator: 4, beatGroups: [1, 1, 1, 1] };
+    var SUPPORTED_TIME_DENOMINATORS = { 2: true, 4: true, 8: true, 16: true };
+    var MAX_TIME_SIGNATURE_NUMERATOR = 32;
     var BLACK = [0, 0, 0];
     var SETTINGS_SECTION = "AEStaffGenerator";
     var MIN_LENGTH = 300;
@@ -145,6 +147,88 @@ See THIRD_PARTY_NOTICES.md and the OFL notice next to the embedded glyph data.
     function own(object, key) {
         return Object.prototype.hasOwnProperty.call(object, key);
     }
+    function defaultBeatGroupsForTimeSignature(numerator, denominator) {
+        var groups = [];
+        var i;
+        if (denominator === 8 && numerator >= 6 && numerator % 3 === 0) {
+            for (i = 0; i < numerator / 3; i += 1) { groups.push(3); }
+            return groups;
+        }
+        if (denominator === 8 && numerator === 5) {
+            return [2, 3];
+        }
+        if (denominator === 8 && numerator === 7) {
+            return [2, 2, 3];
+        }
+        for (i = 0; i < numerator; i += 1) { groups.push(1); }
+        return groups;
+    }
+    function normalizeTimeSignature(numerator, denominator, beatGroups) {
+        var groups;
+        var total = 0;
+        var i;
+        if (!isFiniteNumber(numerator) || !isFiniteNumber(denominator)) { return null; }
+        numerator = Math.floor(numerator);
+        denominator = Math.floor(denominator);
+        if (numerator < 1 || numerator > MAX_TIME_SIGNATURE_NUMERATOR || !SUPPORTED_TIME_DENOMINATORS[denominator]) {
+            return null;
+        }
+        groups = beatGroups && beatGroups.length ? beatGroups.slice(0) : defaultBeatGroupsForTimeSignature(numerator, denominator);
+        for (i = 0; i < groups.length; i += 1) {
+            if (!isFiniteNumber(groups[i]) || groups[i] < 1 || Math.floor(groups[i]) !== groups[i]) { return null; }
+            total += groups[i];
+        }
+        if (total !== numerator) { return null; }
+        return { numerator: numerator, denominator: denominator, beatGroups: groups };
+    }
+    function cloneTimeSignature(timeSignature) {
+        var normalized = normalizeTimeSignature(timeSignature && timeSignature.numerator, timeSignature && timeSignature.denominator, timeSignature && timeSignature.beatGroups);
+        return normalized || { numerator: DEFAULT_TIME_SIGNATURE.numerator, denominator: DEFAULT_TIME_SIGNATURE.denominator, beatGroups: DEFAULT_TIME_SIGNATURE.beatGroups.slice(0) };
+    }
+    function timeSignatureLabel(timeSignature) {
+        var normalized = cloneTimeSignature(timeSignature);
+        return normalized.numerator + "/" + normalized.denominator;
+    }
+    function timeSignatureTicks(timeSignature) {
+        var normalized = cloneTimeSignature(timeSignature);
+        return TICKS_PER_QUARTER * 4 * normalized.numerator / normalized.denominator;
+    }
+    function timeSignatureBeatTicks(timeSignature) {
+        var normalized = cloneTimeSignature(timeSignature);
+        return TICKS_PER_QUARTER * 4 / normalized.denominator;
+    }
+    function timeSignatureEquals(first, second) {
+        var a = cloneTimeSignature(first);
+        var b = cloneTimeSignature(second);
+        return a.numerator === b.numerator && a.denominator === b.denominator && a.beatGroups.join(",") === b.beatGroups.join(",");
+    }
+    function timeSignatureForMeasure(measure, fallback) {
+        return cloneTimeSignature(measure && measure.timeSignature ? measure.timeSignature : (fallback || DEFAULT_TIME_SIGNATURE));
+    }
+    function timeSignatureBeatGroupIndex(timeSignature, tick) {
+        var normalized = cloneTimeSignature(timeSignature);
+        var beatTicks = timeSignatureBeatTicks(normalized);
+        var cursor = 0;
+        var i;
+        var end;
+        for (i = 0; i < normalized.beatGroups.length; i += 1) {
+            end = cursor + normalized.beatGroups[i] * beatTicks;
+            if (tick < end) { return i; }
+            cursor = end;
+        }
+        return normalized.beatGroups.length - 1;
+    }
+    function timeSignatureBeatGroupEnd(timeSignature, tick) {
+        var normalized = cloneTimeSignature(timeSignature);
+        var beatTicks = timeSignatureBeatTicks(normalized);
+        var cursor = 0;
+        var i;
+        for (i = 0; i < normalized.beatGroups.length; i += 1) {
+            cursor += normalized.beatGroups[i] * beatTicks;
+            if (tick < cursor) { return cursor; }
+        }
+        return timeSignatureTicks(normalized);
+    }
     function zeroTangents(count) {
         var result = [];
         var i;
@@ -240,6 +324,7 @@ See THIRD_PARTY_NOTICES.md and the OFL notice next to the embedded glyph data.
         "noteheadWhole": {"contours":[{"vertices":[[0.02,-0.5],[-0.844,-0.008],[-0.02,0.5],[0.844,-0.008]],"inTangents":[[0.372,0.0],[0.0,-0.272],[-0.596,0.0],[0.0,0.28]],"outTangents":[[-0.532,0.0],[0.0,0.268],[0.656,0.0],[0.0,-0.284]],"closed":true},{"vertices":[[-0.4,-0.252],[-0.084,-0.412],[0.412,0.124],[0.404,0.2],[0.228,0.392],[0.104,0.408],[0.0,0.392],[-0.188,0.288],[-0.272,0.2],[-0.412,-0.156]],"inTangents":[[-0.008,0.032],[-0.124,0.0],[0.0,-0.24],[0.004,-0.024],[0.1,-0.024],[0.04,0.0],[0.036,0.012],[0.056,0.048],[0.024,0.032],[0.0,0.128]],"outTangents":[[0.044,-0.14],[0.276,0.0],[0.0,0.028],[-0.02,0.1],[-0.04,0.012],[-0.036,0.0],[-0.068,-0.02],[-0.032,-0.028],[-0.08,-0.092],[0.0,-0.032]],"closed":true}],"bbox":{"sw":[-0.844,-0.5],"ne":[0.844,0.5]},"advanceWidth":1.688,"nominalWidth":1.688,"anchors":{"cutOutNW":[-0.672,-0.332],"cutOutSE":[0.688,0.364]}},
         "noteheadHalf": {"contours":[{"vertices":[[-0.202,0.5],[0.59,-0.168],[0.194,-0.5],[-0.59,0.168]],"inTangents":[[-0.22,0.0],[0.0,0.132],[0.232,0.0],[0.0,-0.208]],"outTangents":[[0.66,0.0],[0.0,-0.204],[-0.596,0.0],[0.0,0.212]],"closed":true},{"vertices":[[0.102,0.184],[-0.29,0.348],[-0.45,0.256],[-0.474,0.176],[-0.11,-0.18],[0.294,-0.336],[0.442,-0.252],[0.466,-0.176]],"inTangents":[[0.28,-0.184],[0.088,0.0],[0.028,0.048],[0.0,0.028],[-0.276,0.16],[-0.08,0.0],[-0.028,-0.048],[0.0,-0.028]],"outTangents":[[-0.18,0.12],[-0.084,0.0],[-0.012,-0.024],[0.0,-0.088],[0.2,-0.116],[0.076,0.0],[0.012,0.024],[0.0,0.08]],"closed":true}],"bbox":{"sw":[-0.59,-0.5],"ne":[0.59,0.5]},"advanceWidth":1.18,"nominalWidth":1.18,"anchors":{"cutOutNW":[-0.386,-0.296],"cutOutSE":[0.39,0.3],"splitStemDownNE":[0.366,0.3],"splitStemDownNW":[-0.462,0.428],"splitStemUpSE":[0.518,-0.372],"splitStemUpSW":[-0.262,-0.38],"stemDownNW":[-0.59,0.168],"stemUpSE":[0.59,-0.168]}},
         "noteheadBlack": {"contours":[{"vertices":[[-0.202,0.5],[0.59,-0.168],[0.202,-0.5],[-0.59,0.168]],"inTangents":[[-0.216,0.0],[0.0,0.34],[0.228,0.0],[0.0,-0.344]],"outTangents":[[0.356,0.0],[0.0,-0.204],[-0.44,0.0],[0.0,0.208]],"closed":true}],"bbox":{"sw":[-0.59,-0.5],"ne":[0.59,0.5]},"advanceWidth":1.18,"nominalWidth":1.18,"anchors":{"cutOutNW":[-0.382,-0.3],"cutOutSE":[0.35,0.296],"splitStemDownNE":[0.378,0.248],"splitStemDownNW":[-0.47,0.416],"splitStemUpSE":[0.502,-0.392],"splitStemUpSW":[-0.278,-0.356],"stemDownNW":[-0.59,0.168],"stemUpSE":[0.59,-0.168]}},
+        "augmentationDot": {"contours":[{"vertices":[[0.2,0.0],[0.0,-0.2],[-0.2,0.0],[0.0,0.2]],"inTangents":[[0.0,0.112],[0.112,0.0],[0.0,-0.112],[-0.112,0.0]],"outTangents":[[0.0,-0.112],[-0.112,0.0],[0.0,0.112],[0.112,0.0]],"closed":true}],"bbox":{"sw":[-0.2,-0.2],"ne":[0.2,0.2]},"advanceWidth":0.4,"nominalWidth":0.4,"anchors":{}},
         "restWhole": {"contours":[{"vertices":[[0.564,0.436],[0.564,0.068],[0.46,-0.036],[-0.46,-0.036],[-0.564,0.068],[-0.564,0.436],[-0.46,0.54],[0.46,0.54]],"inTangents":[[0.0,0.056],[0,0],[0.056,0.0],[0,0],[0.0,-0.06],[0,0],[-0.06,0.0],[0,0]],"outTangents":[[0,0],[0.0,-0.06],[0,0],[-0.06,0.0],[0,0],[0.0,0.056],[0,0],[0.056,0.0]],"closed":true}],"bbox":{"sw":[-0.564,-0.036],"ne":[0.564,0.54]},"advanceWidth":1.132,"nominalWidth":1.128,"anchors":{}},
         "restHalf": {"contours":[{"vertices":[[0.564,-0.096],[0.564,-0.464],[0.46,-0.568],[-0.46,-0.568],[-0.564,-0.464],[-0.564,-0.096],[-0.46,0.008],[0.46,0.008]],"inTangents":[[0.0,0.056],[0,0],[0.056,0.0],[0,0],[0.0,-0.06],[0,0],[-0.06,0.0],[0,0]],"outTangents":[[0,0],[0.0,-0.06],[0,0],[-0.06,0.0],[0,0],[0.0,0.056],[0,0],[0.056,0.0]],"closed":true}],"bbox":{"sw":[-0.564,-0.568],"ne":[0.564,0.008]},"advanceWidth":1.132,"nominalWidth":1.128,"anchors":{}},
         "restQuarter": {"contours":[{"vertices":[[-0.23,0.152],[-0.058,0.392],[-0.034,0.448],[-0.038,0.464],[-0.082,0.484],[-0.146,0.472],[-0.21,0.46],[-0.538,0.844],[-0.074,1.464],[0.03,1.5],[0.09,1.476],[0.098,1.448],[0.034,1.352],[-0.07,1.208],[-0.086,1.104],[0.102,0.816],[0.166,0.812],[0.478,0.88],[0.49,0.884],[0.518,0.888],[0.538,0.872],[0.39,0.644],[0.114,0.088],[0.118,0.036],[0.382,-0.552],[0.398,-0.612],[0.382,-0.688],[-0.278,-1.46],[-0.35,-1.492],[-0.43,-1.408],[-0.414,-1.344],[-0.17,-0.808],[-0.41,-0.3],[-0.466,-0.184],[-0.426,-0.088]],"inTangents":[[0,0],[-0.052,-0.084],[0.0,-0.008],[0.004,-0.004],[0.02,0.0],[0.016,0.004],[0.02,0.0],[0.0,-0.212],[-0.292,-0.224],[-0.032,0.0],[-0.004,0.016],[0.0,0.008],[0.032,0.028],[0.008,0.036],[0.0,0.036],[-0.128,0.024],[-0.024,0.0],[-0.064,-0.024],[-0.004,0.0],[-0.008,0.0],[0.0,0.012],[0.044,0.048],[0.0,0.224],[0.0,0.016],[-0.104,0.164],[0.0,0.02],[0.0,0.0],[0.068,0.068],[0.024,0.0],[0.0,-0.056],[-0.012,-0.024],[0.0,-0.288],[0.18,-0.188],[0.0,-0.032],[0.0,0.0]],"outTangents":[[0.064,0.08],[0.008,0.016],[0.0,0.004],[-0.008,0.016],[-0.016,0.0],[-0.02,0.0],[-0.172,0.0],[0.0,0.2],[0.032,0.024],[0.028,0.0],[0.004,-0.012],[0.0,-0.036],[-0.052,0.0],[-0.012,-0.032],[0.0,-0.124],[0.02,-0.004],[0.116,0.0],[0.004,0.0],[0.012,0.004],[0.012,0.0],[0.0,-0.048],[-0.152,-0.184],[0.0,-0.016],[0.016,-0.232],[0.012,-0.02],[0.0,-0.04],[0.0,0.0],[-0.02,-0.02],[-0.04,0.0],[0.0,0.02],[0.016,0.044],[0.0,0.148],[-0.04,0.04],[0.0,0.056],[0,0]],"closed":true}],"bbox":{"sw":[-0.538,-1.492],"ne":[0.538,1.5]},"advanceWidth":1.08,"nominalWidth":1.076,"anchors":{}},
@@ -307,6 +392,41 @@ See THIRD_PARTY_NOTICES.md and the OFL notice next to the embedded glyph data.
     }
     function diatonicIndex(pitch) {
         return pitch.octave * 7 + STEP_INDEX[pitch.step];
+    }
+    function isPitchedEvent(event) {
+        return !!event && (event.type === "note" || event.type === "chord");
+    }
+    function eventPitchList(event) {
+        if (!event) {
+            return [];
+        }
+        if (event.type === "chord") {
+            return event.pitches || [];
+        }
+        return event.type === "note" && event.pitch ? [event.pitch] : [];
+    }
+    function eventPrimaryPitch(event) {
+        var pitches = eventPitchList(event);
+        return pitches.length > 0 ? pitches[0] : null;
+    }
+    function eventBaseNoteValue(event) {
+        return event ? event.noteValue : null;
+    }
+    function eventDotCount(event) {
+        return event && event.dots === 1 ? 1 : 0;
+    }
+    function durationTicksForValue(noteValue, dots) {
+        if (!own(DURATION_TICKS, noteValue) || (dots !== 0 && dots !== 1) ||
+                (dots === 1 && (noteValue === "whole" || noteValue === "sixteenth"))) {
+            return null;
+        }
+        return DURATION_TICKS[noteValue] * (dots === 1 ? 1.5 : 1);
+    }
+    function pitchNotation(pitch, event) {
+        if (pitch && pitch.notation) {
+            return pitch.notation;
+        }
+        return event && event.type === "note" ? event.notation : null;
     }
     function makePitchFromDiatonic(index, alter) {
         var octave = Math.floor(index / 7);
@@ -552,6 +672,7 @@ See THIRD_PARTY_NOTICES.md and the OFL notice next to the embedded glyph data.
         var current = [];
         var currentBeat = -1;
         var groupId = 0;
+        var timeSignature = timeSignatureForMeasure(measure, DEFAULT_TIME_SIGNATURE);
         var i;
         var event;
         var beat;
@@ -564,7 +685,7 @@ See THIRD_PARTY_NOTICES.md and the OFL notice next to the embedded glyph data.
                 for (j = 0; j < current.length; j += 1) {
                     current[j].beamGroupId = groupId;
                     current[j].beamRole = j === 0 ? "begin" : (j === current.length - 1 ? "end" : "continue");
-                    current[j].beamLevel = current[j].noteValue === "sixteenth" ? 2 : 1;
+                    current[j].beamLevel = eventBaseNoteValue(current[j]) === "sixteenth" ? 2 : 1;
                     current[j].notation.beamGroupId = groupId;
                     current[j].notation.beamRole = current[j].beamRole;
                     current[j].notation.beamLevel = current[j].beamLevel;
@@ -575,13 +696,13 @@ See THIRD_PARTY_NOTICES.md and the OFL notice next to the embedded glyph data.
         }
         for (i = 0; i < measure.events.length; i += 1) {
             event = measure.events[i];
-            if (event.type !== "note" || (event.noteValue !== "eighth" && event.noteValue !== "sixteenth")) {
+            if (!isPitchedEvent(event) || (eventBaseNoteValue(event) !== "eighth" && eventBaseNoteValue(event) !== "sixteenth")) {
                 flush();
                 continue;
             }
-            beat = Math.floor(event.startTicks / TICKS_PER_QUARTER);
+            beat = timeSignatureBeatGroupIndex(timeSignature, event.startTicks);
             endTick = event.startTicks + event.durationTicks;
-            if (endTick > (beat + 1) * TICKS_PER_QUARTER) {
+            if (endTick > timeSignatureBeatGroupEnd(timeSignature, event.startTicks)) {
                 flush();
                 continue;
             }
@@ -642,6 +763,7 @@ See THIRD_PARTY_NOTICES.md and the OFL notice next to the embedded glyph data.
                     startTicks: tick,
                     durationTicks: DURATION_TICKS[noteValue],
                     noteValue: noteValue,
+                    dots: 0,
                     notation: { accidental: null, beamRole: null, beamGroupId: null }
                 };
                 if (isNote) {
@@ -681,12 +803,21 @@ See THIRD_PARTY_NOTICES.md and the OFL notice next to the embedded glyph data.
         var total;
         var expected;
         var duration;
+        var dots;
         var stateKey;
         var accidentalState;
         var currentAlter;
         var expectedAccidental;
+        var pitches;
+        var pitch;
+        var pitchIndex;
+        var pitchKey;
+        var seenPitches;
+        var notation;
         var beamGroups;
         var beamGroup;
+        var timeSignature;
+        var expectedMeasureTicks;
         var beat;
         var endTick;
         var key;
@@ -696,9 +827,8 @@ See THIRD_PARTY_NOTICES.md and the OFL notice next to the embedded glyph data.
         if (score.ticksPerQuarter !== TICKS_PER_QUARTER) {
             errors.push("Invalid ticksPerQuarter.");
         }
-        if (!score.timeSignature || score.timeSignature.numerator !== 4 || score.timeSignature.denominator !== 4) {
-            errors.push("Unsupported time signature.");
-        }
+        timeSignature = normalizeTimeSignature(score.timeSignature && score.timeSignature.numerator, score.timeSignature && score.timeSignature.denominator, score.timeSignature && score.timeSignature.beatGroups);
+        if (!timeSignature) { errors.push("Unsupported or invalid time signature."); }
         if (settings && score.measures.length !== settings.measures) {
             errors.push("Measure count does not match settings.");
         }
@@ -708,6 +838,16 @@ See THIRD_PARTY_NOTICES.md and the OFL notice next to the embedded glyph data.
                 errors.push("Measure " + (measureIndex + 1) + " has no events.");
                 continue;
             }
+            timeSignature = normalizeTimeSignature(
+                measure.timeSignature && measure.timeSignature.numerator !== undefined ? measure.timeSignature.numerator : (score.timeSignature && score.timeSignature.numerator),
+                measure.timeSignature && measure.timeSignature.denominator !== undefined ? measure.timeSignature.denominator : (score.timeSignature && score.timeSignature.denominator),
+                measure.timeSignature && measure.timeSignature.beatGroups
+            );
+            if (!timeSignature) {
+                errors.push("Unsupported or invalid time signature at measure " + (measureIndex + 1) + ".");
+                timeSignature = cloneTimeSignature(score.timeSignature || DEFAULT_TIME_SIGNATURE);
+            }
+            expectedMeasureTicks = timeSignatureTicks(timeSignature);
             total = 0;
             accidentalState = {};
             beamGroups = {};
@@ -717,50 +857,69 @@ See THIRD_PARTY_NOTICES.md and the OFL notice next to the embedded glyph data.
                     errors.push("Invalid duration at measure " + (measureIndex + 1) + ".");
                     continue;
                 }
-                duration = DURATION_TICKS[event.noteValue];
+                dots = eventDotCount(event);
+                if (event.dots !== undefined && event.dots !== 0 && event.dots !== 1) {
+                    errors.push("Unsupported dot count at measure " + (measureIndex + 1) + ". Only one augmentation dot is supported.");
+                }
+                duration = durationTicksForValue(event.noteValue, dots);
                 if (event.durationTicks !== duration || !isFiniteNumber(event.durationTicks)) {
                     errors.push("Invalid duration at measure " + (measureIndex + 1) + ".");
                 }
                 if (!isFiniteNumber(event.startTicks) || event.startTicks !== total) {
                     errors.push("Invalid event start tick at measure " + (measureIndex + 1) + ".");
                 }
-                if (event.type !== "note" && event.type !== "rest") {
+                if (event.type !== "note" && event.type !== "chord" && event.type !== "rest") {
                     errors.push("Invalid event type at measure " + (measureIndex + 1) + ".");
                 }
                 total += duration;
-                if (event.type === "note") {
-                    if (!event.pitch || !own(STEP_INDEX, event.pitch.step) ||
-                            event.pitch.alter < -1 || event.pitch.alter > 1 ||
-                            !isFiniteNumber(event.pitch.octave)) {
+                pitches = eventPitchList(event);
+                if (event.type === "note" && pitches.length !== 1) {
+                    errors.push("Note pitch data is missing at measure " + (measureIndex + 1) + ".");
+                }
+                if (event.type === "chord" && pitches.length < 2) {
+                    errors.push("Chord at measure " + (measureIndex + 1) + " must contain at least two pitches.");
+                }
+                seenPitches = {};
+                for (pitchIndex = 0; pitchIndex < pitches.length; pitchIndex += 1) {
+                    pitch = pitches[pitchIndex];
+                    if (!pitch || !own(STEP_INDEX, pitch.step) || !isFiniteNumber(pitch.alter) ||
+                            pitch.alter < -1 || pitch.alter > 1 || !isFiniteNumber(pitch.octave)) {
                         errors.push("Invalid pitch spelling at measure " + (measureIndex + 1) + ".");
-                    } else {
-                        expected = pitchToMidi(event.pitch);
-                        if (event.pitch.midi !== expected) {
-                            errors.push("Pitch MIDI mismatch at measure " + (measureIndex + 1) + ".");
-                        }
-                        if (settings && (expected < settings.pitchLowMidi || expected > settings.pitchHighMidi)) {
-                            errors.push("Pitch range violation at measure " + (measureIndex + 1) + ".");
-                        }
-                        if (settings && !settings.accidentals && event.pitch.alter !== 0) {
-                            errors.push("Accidental is disabled at measure " + (measureIndex + 1) + ".");
-                        }
-                        stateKey = accidentalStateKey(event.pitch);
-                        currentAlter = own(accidentalState, stateKey) ? accidentalState[stateKey] : 0;
-                        expectedAccidental = event.pitch.alter === currentAlter ? null :
-                            (event.pitch.alter === 1 ? "sharp" : (event.pitch.alter === -1 ? "flat" : "natural"));
-                        if (!event.notation || event.notation.accidental !== expectedAccidental) {
-                            errors.push("Accidental state mismatch at measure " + (measureIndex + 1) + ".");
-                        }
-                        accidentalState[stateKey] = event.pitch.alter;
+                        continue;
                     }
+                    expected = pitchToMidi(pitch);
+                    pitchKey = isFiniteNumber(pitch.midi) ? "midi:" + pitch.midi :
+                        "spelling:" + pitch.step + ":" + pitch.alter + ":" + pitch.octave;
+                    if (own(seenPitches, pitchKey)) {
+                        errors.push("Chord at measure " + (measureIndex + 1) + " contains a duplicate pitch.");
+                    }
+                    seenPitches[pitchKey] = true;
+                    if (pitch.midi !== expected) {
+                        errors.push("Pitch MIDI mismatch at measure " + (measureIndex + 1) + ".");
+                    }
+                    if (settings && (expected < settings.pitchLowMidi || expected > settings.pitchHighMidi)) {
+                        errors.push("Pitch range violation at measure " + (measureIndex + 1) + ".");
+                    }
+                    if (settings && !settings.accidentals && pitch.alter !== 0) {
+                        errors.push("Accidental is disabled at measure " + (measureIndex + 1) + ".");
+                    }
+                    stateKey = accidentalStateKey(pitch);
+                    currentAlter = own(accidentalState, stateKey) ? accidentalState[stateKey] : 0;
+                    expectedAccidental = pitch.alter === currentAlter ? null :
+                        (pitch.alter === 1 ? "sharp" : (pitch.alter === -1 ? "flat" : "natural"));
+                    notation = pitchNotation(pitch, event);
+                    if (!notation || notation.accidental !== expectedAccidental) {
+                        errors.push("Accidental state mismatch at measure " + (measureIndex + 1) + ".");
+                    }
+                    accidentalState[stateKey] = pitch.alter;
                 }
                 if (event.beamGroupId) {
-                    if (event.type !== "note" || (event.noteValue !== "eighth" && event.noteValue !== "sixteenth")) {
+                    if (!isPitchedEvent(event) || (eventBaseNoteValue(event) !== "eighth" && eventBaseNoteValue(event) !== "sixteenth")) {
                         errors.push("Invalid Beam Group event at measure " + (measureIndex + 1) + ".");
                     }
-                    beat = Math.floor(event.startTicks / TICKS_PER_QUARTER);
+                    beat = timeSignatureBeatGroupIndex(timeSignature, event.startTicks);
                     endTick = event.startTicks + event.durationTicks;
-                    if (endTick > (beat + 1) * TICKS_PER_QUARTER) {
+                    if (endTick > timeSignatureBeatGroupEnd(timeSignature, event.startTicks)) {
                         errors.push("Beam Group crosses a beat at measure " + (measureIndex + 1) + ".");
                     }
                     if (!beamGroups[event.beamGroupId]) {
@@ -782,14 +941,21 @@ See THIRD_PARTY_NOTICES.md and the OFL notice next to the embedded glyph data.
                     errors.push("Beam Group has fewer than two events at measure " + (measureIndex + 1) + ".");
                 }
             }
-            if (measure.tickTotal !== total || total !== MEASURE_TICKS) {
-                errors.push("Measure " + (measureIndex + 1) + " does not total 1920 ticks.");
+            if (measure.tickTotal !== total || total !== expectedMeasureTicks) {
+                errors.push("Measure " + (measureIndex + 1) + " does not total " + expectedMeasureTicks + " ticks for " + timeSignatureLabel(timeSignature) + ".");
             }
         }
         return errors;
     }
     function effectiveThickness(value, staffSpace, globalScale) {
         return value * (staffSpace / 20) * (globalScale / 100);
+    }
+    function tieThicknessForStaff(stemThickness, staffSpace, globalScale) {
+        var scale = globalScale / 100;
+        var minimum = 0.055 * staffSpace * scale;
+        var maximum = 0.12 * staffSpace * scale;
+        var stemBased = stemThickness * 0.70;
+        return clamp(Math.max(minimum, stemBased), minimum, Math.max(minimum, maximum));
     }
     function addCommand(plan, command) {
         plan.commands.push(command);
@@ -800,6 +966,16 @@ See THIRD_PARTY_NOTICES.md and the OFL notice next to the embedded glyph data.
             group: group,
             name: name,
             points: [[x1, y1], [x2, y2]],
+            thickness: thickness,
+            color: BLACK
+        });
+    }
+    function addPolylineCommand(plan, group, name, points, thickness) {
+        addCommand(plan, {
+            type: "line",
+            group: group,
+            name: name,
+            points: points,
             thickness: thickness,
             color: BLACK
         });
@@ -863,21 +1039,153 @@ See THIRD_PARTY_NOTICES.md and the OFL notice next to the embedded glyph data.
     function yForStaffPosition(staffPosition, space) {
         return 4 * space - staffPosition * 0.5 * space;
     }
-    function addLedgerCommands(plan, eventLayout, space, thickness, extension) {
-        var position = eventLayout.staffPosition;
-        var ledgerPosition;
-        var halfWidth = GLYPHS[noteHeadGlyphName(eventLayout.event.noteValue)].nominalWidth * eventLayout.noteScale * 0.5 + extension;
-        if (position > 8) {
-            for (ledgerPosition = 10; ledgerPosition <= position; ledgerPosition += 2) {
-                addLineCommand(plan, "LEDGER_LINES", "Ledger " + eventLayout.name + " " + ledgerPosition,
-                    eventLayout.x - halfWidth, yForStaffPosition(ledgerPosition, space),
-                    eventLayout.x + halfWidth, yForStaffPosition(ledgerPosition, space), thickness);
+    function eventStaffPositionRange(event) {
+        var pitches = eventPitchList(event);
+        var minimum = 4;
+        var maximum = 4;
+        var i;
+        var position;
+        if (pitches.length > 0) {
+            minimum = staffPositionForPitch(pitches[0]);
+            maximum = minimum;
+            for (i = 1; i < pitches.length; i += 1) {
+                position = staffPositionForPitch(pitches[i]);
+                minimum = Math.min(minimum, position);
+                maximum = Math.max(maximum, position);
             }
-        } else if (position < 0) {
-            for (ledgerPosition = -2; ledgerPosition >= position; ledgerPosition -= 2) {
+        }
+        return { min: minimum, max: maximum, center: (minimum + maximum) / 2 };
+    }
+    function eventStemDirection(event) {
+        return eventStaffPositionRange(event).center < 4 ? "up" : "down";
+    }
+    function orderedEventPitches(event) {
+        var result = [];
+        var pitches = eventPitchList(event);
+        var i;
+        var j;
+        var value;
+        var valuePosition;
+        var currentPosition;
+        for (i = 0; i < pitches.length; i += 1) {
+            value = pitches[i];
+            valuePosition = staffPositionForPitch(value);
+            j = result.length;
+            while (j > 0) {
+                currentPosition = staffPositionForPitch(result[j - 1]);
+                if (currentPosition < valuePosition ||
+                        (currentPosition === valuePosition && result[j - 1].midi <= value.midi)) {
+                    break;
+                }
+                j -= 1;
+            }
+            result.splice(j, 0, value);
+        }
+        return result;
+    }
+    function eventNoteheadLayouts(event, noteScale, space) {
+        var pitches = orderedEventPitches(event);
+        var result = [];
+        var direction = eventStemDirection(event);
+        var shift = Math.max(0.55 * noteScale, 0.45 * space);
+        var i;
+        var j;
+        var runEnd;
+        var position;
+        var notation;
+        for (i = 0; i < pitches.length; i += 1) {
+            notation = pitchNotation(pitches[i], event);
+            result.push({
+                pitch: pitches[i],
+                staffPosition: staffPositionForPitch(pitches[i]),
+                y: yForStaffPosition(staffPositionForPitch(pitches[i]), space),
+                xOffset: 0,
+                accidental: notation && notation.accidental ? notation.accidental : null,
+                accidentalColumn: 0
+            });
+        }
+        if (event.type !== "chord" || result.length < 2) {
+            return result;
+        }
+        i = 0;
+        while (i < result.length) {
+            runEnd = i;
+            while (runEnd + 1 < result.length && result[runEnd + 1].staffPosition - result[runEnd].staffPosition === 1) {
+                runEnd += 1;
+            }
+            if (runEnd > i) {
+                for (j = i; j <= runEnd; j += 1) {
+                    position = j - i;
+                    if (direction === "up") {
+                        result[j].xOffset = position % 2 === 0 ? -shift : 0;
+                    } else {
+                        result[j].xOffset = position % 2 === 0 ? 0 : shift;
+                    }
+                }
+            }
+            i = runEnd + 1;
+        }
+        return result;
+    }
+    function assignAccidentalColumns(noteheads) {
+        var columns = [];
+        var i;
+        var j;
+        var column;
+        var occupied;
+        for (i = 0; i < noteheads.length; i += 1) {
+            if (!noteheads[i].accidental) {
+                continue;
+            }
+            column = 0;
+            occupied = true;
+            while (occupied) {
+                occupied = false;
+                for (j = 0; j < columns.length; j += 1) {
+                    if (columns[j] && columns[j].column === column &&
+                            Math.abs(columns[j].staffPosition - noteheads[i].staffPosition) < 2) {
+                        occupied = true;
+                        break;
+                    }
+                }
+                if (occupied) {
+                    column += 1;
+                }
+            }
+            noteheads[i].accidentalColumn = column;
+            columns.push({ column: column, staffPosition: noteheads[i].staffPosition });
+        }
+    }
+    function addLedgerCommands(plan, eventLayout, space, thickness, extension) {
+        var noteheads = eventLayout.noteheads || eventNoteheadLayouts(eventLayout.event, eventLayout.noteScale, space);
+        var ledgerPositions = {};
+        var halfWidth = glyphWidthPixels(noteHeadGlyphName(eventLayout.event.noteValue), eventLayout.noteScale) / 2;
+        var left = eventLayout.x - halfWidth - extension;
+        var right = eventLayout.x + halfWidth + extension;
+        var i;
+        var j;
+        var position;
+        var ledgerPosition;
+        for (i = 0; i < noteheads.length; i += 1) {
+            position = noteheads[i].staffPosition;
+            left = Math.min(left, eventLayout.x + noteheads[i].xOffset - halfWidth - extension);
+            right = Math.max(right, eventLayout.x + noteheads[i].xOffset + halfWidth + extension);
+            if (position > 8) {
+                for (ledgerPosition = 10; ledgerPosition <= position; ledgerPosition += 2) {
+                    ledgerPositions[ledgerPosition] = true;
+                }
+            } else if (position < 0) {
+                for (ledgerPosition = -2; ledgerPosition >= position; ledgerPosition -= 2) {
+                    ledgerPositions[ledgerPosition] = true;
+                }
+            }
+        }
+        for (j in ledgerPositions) {
+            if (own(ledgerPositions, j)) {
+                ledgerPosition = parseInt(j, 10);
                 addLineCommand(plan, "LEDGER_LINES", "Ledger " + eventLayout.name + " " + ledgerPosition,
-                    eventLayout.x - halfWidth, yForStaffPosition(ledgerPosition, space),
-                    eventLayout.x + halfWidth, yForStaffPosition(ledgerPosition, space), thickness);
+                    left, yForStaffPosition(ledgerPosition, space),
+                    right, yForStaffPosition(ledgerPosition, space), thickness);
             }
         }
     }
@@ -894,28 +1202,307 @@ See THIRD_PARTY_NOTICES.md and the OFL notice next to the embedded glyph data.
         var accidentalName;
         var left;
         var right;
-        if (event.type === "note") {
-            glyphName = noteHeadGlyphName(event.noteValue);
+        var noteheads;
+        var i;
+        var head;
+        var accidentalWidth;
+        var accidentalGap = 0.25 * space * symbolScale;
+        var dotWidth = glyphWidthPixels("augmentationDot", space * symbolScale);
+        var dotGap = 0.25 * space * symbolScale;
+        if (isPitchedEvent(event)) {
+            glyphName = noteHeadGlyphName(eventBaseNoteValue(event));
             halfWidth = glyphWidthPixels(glyphName, noteScale) / 2;
+            noteheads = eventNoteheadLayouts(event, noteScale, space);
+            assignAccidentalColumns(noteheads);
             left = halfWidth;
             right = halfWidth;
-            if (staffPositionForPitch(event.pitch) < 0 || staffPositionForPitch(event.pitch) > 8) {
-                left += ENGRAVING_DEFAULTS.legerLineExtension * space;
-                right += ENGRAVING_DEFAULTS.legerLineExtension * space;
+            for (i = 0; i < noteheads.length; i += 1) {
+                head = noteheads[i];
+                left = Math.max(left, halfWidth - head.xOffset);
+                right = Math.max(right, halfWidth + head.xOffset);
+                if (head.staffPosition < 0 || head.staffPosition > 8) {
+                    left = Math.max(left, halfWidth + ENGRAVING_DEFAULTS.legerLineExtension * space - head.xOffset);
+                    right = Math.max(right, halfWidth + ENGRAVING_DEFAULTS.legerLineExtension * space + head.xOffset);
+                }
+                if (head.accidental) {
+                    accidentalName = head.accidental === "sharp" ? "accidentalSharp" :
+                        (head.accidental === "flat" ? "accidentalFlat" : "accidentalNatural");
+                    accidentalWidth = glyphWidthPixels(accidentalName, space * symbolScale);
+                    left = Math.max(left, halfWidth + accidentalWidth + accidentalGap +
+                        head.accidentalColumn * (accidentalWidth + accidentalGap) - head.xOffset);
+                }
+                if (eventDotCount(event) > 0) {
+                    right = Math.max(right, halfWidth + head.xOffset + dotGap + dotWidth);
+                }
             }
-            if (event.notation.accidental) {
-                accidentalName = event.notation.accidental === "sharp" ? "accidentalSharp" :
-                    (event.notation.accidental === "flat" ? "accidentalFlat" : "accidentalNatural");
-                left = Math.max(left, halfWidth + glyphWidthPixels(accidentalName, space * symbolScale) + 0.25 * space);
-            }
-            if (!event.beamGroupId && (event.noteValue === "eighth" || event.noteValue === "sixteenth")) {
+            if (!event.beamGroupId && (eventBaseNoteValue(event) === "eighth" || eventBaseNoteValue(event) === "sixteenth")) {
                 right += 1.3 * space * symbolScale;
             }
             return { left: left, right: right };
         }
         glyphName = "rest" + event.noteValue.charAt(0).toUpperCase() + event.noteValue.substr(1);
         halfWidth = glyphWidthPixels(glyphName, space * symbolScale) / 2;
-        return { left: halfWidth, right: halfWidth };
+        right = halfWidth;
+        if (eventDotCount(event) > 0) {
+            right += dotGap + dotWidth;
+        }
+        return { left: halfWidth, right: right };
+    }
+    function accidentalGlyphName(accidental) {
+        if (accidental === "sharp") {
+            return "accidentalSharp";
+        }
+        if (accidental === "flat") {
+            return "accidentalFlat";
+        }
+        return "accidentalNatural";
+    }
+    function addImportedAccidentalCommands(plan, eventLayout, space, symbolScale) {
+        var event = eventLayout.event;
+        var noteheads = eventLayout.noteheads || [];
+        var headName = noteHeadGlyphName(eventBaseNoteValue(event));
+        var halfWidth = glyphWidthPixels(headName, eventLayout.noteScale) / 2;
+        var scale = space * symbolScale;
+        var gap = 0.25 * scale;
+        var i;
+        var head;
+        var name;
+        var width;
+        var x;
+        for (i = 0; i < noteheads.length; i += 1) {
+            head = noteheads[i];
+            if (!head.accidental) {
+                continue;
+            }
+            name = accidentalGlyphName(head.accidental);
+            width = glyphWidthPixels(name, scale);
+            x = eventLayout.x + head.xOffset - halfWidth - gap - width / 2 -
+                head.accidentalColumn * (width + gap);
+            addGlyphCommand(plan, "ACCIDENTALS", eventLayout.name + " accidental " + (i + 1), name, x,
+                head.y, scale, {});
+        }
+    }
+    function dotStaffPositionForNotehead(notehead, occupied) {
+        var position = notehead.staffPosition % 2 === 0 ? notehead.staffPosition + 1 : notehead.staffPosition;
+        while (occupied[String(position)]) {
+            position += 2;
+        }
+        occupied[String(position)] = true;
+        return position;
+    }
+    function addAugmentationDots(plan, eventLayout, space, symbolScale) {
+        var event = eventLayout.event;
+        var scale = space * symbolScale;
+        var dotWidth = glyphWidthPixels("augmentationDot", scale);
+        var gap = 0.25 * scale;
+        var noteheads;
+        var occupied = {};
+        var headName;
+        var halfWidth;
+        var i;
+        var head;
+        var dotPosition;
+        var x;
+        var y;
+        if (eventDotCount(event) === 0) {
+            return;
+        }
+        if (isPitchedEvent(event)) {
+            noteheads = eventLayout.noteheads || [];
+            headName = noteHeadGlyphName(eventBaseNoteValue(event));
+            halfWidth = glyphWidthPixels(headName, eventLayout.noteScale) / 2;
+            for (i = 0; i < noteheads.length; i += 1) {
+                head = noteheads[i];
+                dotPosition = dotStaffPositionForNotehead(head, occupied);
+                x = eventLayout.x + head.xOffset + halfWidth + gap + dotWidth / 2;
+                y = yForStaffPosition(dotPosition, space);
+                addGlyphCommand(plan, "NOTES", eventLayout.name + " dot " + (i + 1), "augmentationDot", x, y, scale, {});
+            }
+            return;
+        }
+        x = eventLayout.x + GLYPHS["rest" + event.noteValue.charAt(0).toUpperCase() + event.noteValue.substr(1)].bbox.ne[0] * scale + gap + dotWidth / 2;
+        addGlyphCommand(plan, "RESTS", eventLayout.name + " dot", "augmentationDot", x, eventLayout.y, scale, {});
+    }
+    function tiePitchKey(pitch) {
+        if (!pitch) {
+            return "";
+        }
+        if (isFiniteNumber(pitch.midi)) {
+            return "midi:" + pitch.midi;
+        }
+        return pitch.step + ":" + pitch.alter + ":" + pitch.octave;
+    }
+    function findTieNotehead(noteheads, pitch) {
+        var key = tiePitchKey(pitch);
+        var i;
+        if (!key) {
+            return null;
+        }
+        for (i = 0; i < noteheads.length; i += 1) {
+            if (tiePitchKey(noteheads[i].pitch) === key) {
+                return noteheads[i];
+            }
+        }
+        return null;
+    }
+    function addTieCurveCommand(plan, name, x1, y1, x2, y2, direction, space, thickness) {
+        var points = [];
+        var side = direction === "up" ? 1 : -1;
+        var endpointOffset = 0.10 * space;
+        var depth = clamp(Math.abs(x2 - x1) * 0.12, 0.25 * space, 0.55 * space);
+        var i;
+        var t;
+        var x;
+        var y;
+        if (!isFiniteNumber(x1) || !isFiniteNumber(y1) || !isFiniteNumber(x2) || !isFiniteNumber(y2) || x2 <= x1) {
+            return;
+        }
+        for (i = 0; i <= 8; i += 1) {
+            t = i / 8;
+            x = x1 + (x2 - x1) * t;
+            y = (y1 + side * endpointOffset) * (1 - t) + (y2 + side * endpointOffset) * t + side * depth * 4 * t * (1 - t);
+            points.push([x, y]);
+        }
+        addPolylineCommand(plan, "NOTES", name, points, thickness);
+    }
+    function addTieBetweenEventLayouts(plan, first, second, groupId, tieIndex, space, thickness) {
+        var firstHeads = first.noteheads || [];
+        var secondHeads = second.noteheads || [];
+        var firstHead;
+        var secondHead;
+        var headName;
+        var firstHalfWidth;
+        var secondHalfWidth;
+        var x1;
+        var x2;
+        var direction = first.direction || eventStemDirection(first.event);
+        var name = "Tie " + groupId + " " + tieIndex;
+        var boundaryGap = 0.20 * space;
+        var firstBoundary;
+        var secondBoundary;
+        var i;
+        for (i = 0; i < firstHeads.length; i += 1) {
+            firstHead = firstHeads[i];
+            secondHead = findTieNotehead(secondHeads, firstHead.pitch);
+            if (!secondHead) {
+                continue;
+            }
+            headName = noteHeadGlyphName(first.event.noteValue);
+            firstHalfWidth = glyphWidthPixels(headName, first.noteScale) / 2;
+            headName = noteHeadGlyphName(second.event.noteValue);
+            secondHalfWidth = glyphWidthPixels(headName, second.noteScale) / 2;
+            x1 = first.x + firstHead.xOffset + firstHalfWidth;
+            x2 = second.x + secondHead.xOffset - secondHalfWidth;
+            if (first.measureIndex !== second.measureIndex && isFiniteNumber(first.measureEndX) && isFiniteNumber(second.measureStart)) {
+                firstBoundary = first.measureEndX - boundaryGap;
+                secondBoundary = second.measureStart + boundaryGap;
+                if (firstBoundary > x1) {
+                    addTieCurveCommand(plan, name + " before", x1, firstHead.y, firstBoundary, firstHead.y, direction, space, thickness);
+                }
+                if (x2 > secondBoundary) {
+                    addTieCurveCommand(plan, name + " after", secondBoundary, secondHead.y, x2, secondHead.y, direction, space, thickness);
+                }
+            } else {
+                addTieCurveCommand(plan, name, x1, firstHead.y, x2, secondHead.y, direction, space, thickness);
+            }
+        }
+    }
+    function addMidiTieCommands(plan, tiedEventLayouts, space, thickness) {
+        var groups = {};
+        var groupKeys = [];
+        var eventLayout;
+        var event;
+        var key;
+        var group;
+        var i;
+        var j;
+        if (!tiedEventLayouts || tiedEventLayouts.length === 0) {
+            return;
+        }
+        for (i = 0; i < tiedEventLayouts.length; i += 1) {
+            eventLayout = tiedEventLayouts[i];
+            event = eventLayout.event;
+            if (!event || event.tieGroupId === undefined || event.tieGroupId === null) {
+                continue;
+            }
+            key = String(event.tieGroupId);
+            if (!groups[key]) {
+                groups[key] = [];
+                groupKeys.push(key);
+            }
+            groups[key].push(eventLayout);
+        }
+        for (i = 0; i < groupKeys.length; i += 1) {
+            group = groups[groupKeys[i]];
+            group.sort(function (a, b) {
+                var aIndex = isFiniteNumber(a.event.tieIndex) ? a.event.tieIndex : 0;
+                var bIndex = isFiniteNumber(b.event.tieIndex) ? b.event.tieIndex : 0;
+                return aIndex - bIndex;
+            });
+            for (j = 0; j + 1 < group.length; j += 1) {
+                if (group[j].event.tieStart && group[j + 1].event.tieStop) {
+                    addTieBetweenEventLayouts(plan, group[j], group[j + 1], groupKeys[i], j, space, thickness);
+                }
+            }
+        }
+    }
+    function timeSignatureRowWidth(value, timeScale) {
+        var text = String(value);
+        var width = 0;
+        var i;
+        var glyph;
+        var gap = 0.15 * timeScale;
+        for (i = 0; i < text.length; i += 1) {
+            glyph = GLYPHS["timeSig" + text.charAt(i)];
+            if (!glyph) { return 0; }
+            width += glyph.nominalWidth * timeScale;
+            if (i > 0) { width += gap; }
+        }
+        return width;
+    }
+    function timeSignatureAreaWidth(timeSignature, space, symbolScale) {
+        var normalized = cloneTimeSignature(timeSignature);
+        return timeSignatureContentWidth(normalized, space, symbolScale) + 0.8 * space;
+    }
+    function timeSignatureContentWidth(timeSignature, space, symbolScale) {
+        var normalized = cloneTimeSignature(timeSignature);
+        var timeScale = space * symbolScale;
+        return Math.max(timeSignatureRowWidth(normalized.numerator, timeScale), timeSignatureRowWidth(normalized.denominator, timeScale));
+    }
+    function measureHasTimeSignatureChange(score, measureIndex) {
+        if (measureIndex <= 0) { return false; }
+        return !timeSignatureEquals(
+            timeSignatureForMeasure(score.measures[measureIndex], score.timeSignature),
+            timeSignatureForMeasure(score.measures[measureIndex - 1], score.timeSignature)
+        );
+    }
+    function addTimeSignatureCommands(plan, timeSignature, centerX, space, symbolScale, namePrefix) {
+        var normalized = cloneTimeSignature(timeSignature);
+        var timeScale = space * symbolScale;
+        var values = [normalized.numerator, normalized.denominator];
+        var labels = ["Numerator", "Denominator"];
+        var i;
+        var j;
+        var text;
+        var rowWidth;
+        var cursor;
+        var glyph;
+        var glyphName;
+        var gap = 0.15 * timeScale;
+        var label;
+        for (i = 0; i < values.length; i += 1) {
+            text = String(values[i]);
+            rowWidth = timeSignatureRowWidth(values[i], timeScale);
+            cursor = centerX - rowWidth / 2;
+            label = namePrefix || "Time Signature";
+            for (j = 0; j < text.length; j += 1) {
+                glyphName = "timeSig" + text.charAt(j);
+                glyph = GLYPHS[glyphName];
+                addGlyphCommand(plan, "TIME_SIGNATURE", label + " " + labels[i] + (text.length > 1 ? " " + (j + 1) : ""), glyphName,
+                    cursor + glyph.nominalWidth * timeScale / 2, i === 0 ? space : 3 * space, timeScale, {});
+                cursor += glyph.nominalWidth * timeScale + gap;
+            }
+        }
     }
     function calculateMeasureRequiredWidth(measure, space, symbolScale, noteScale) {
         var required = space;
@@ -935,7 +1522,8 @@ See THIRD_PARTY_NOTICES.md and the OFL notice next to the embedded glyph data.
         var noteScale = space * settings.noteScale / 100;
         var leftMargin = 1.00 * space;
         var clefArea = (GLYPHS.gClef.nominalWidth * symbolScale + 0.8) * space;
-        var timeArea = (GLYPHS.timeSig4.nominalWidth * symbolScale + 0.8) * space;
+        var initialTimeSignature = score.measures.length > 0 ? timeSignatureForMeasure(score.measures[0], score.timeSignature) : cloneTimeSignature(score.timeSignature || DEFAULT_TIME_SIGNATURE);
+        var timeArea = timeSignatureAreaWidth(initialTimeSignature, space, symbolScale);
         var rightMargin = 0.80 * space;
         var contentStart = leftMargin + clefArea + timeArea;
         var maximumMeasureWidth = 0;
@@ -943,14 +1531,18 @@ See THIRD_PARTY_NOTICES.md and the OFL notice next to the embedded glyph data.
         var required;
         for (i = 0; i < score.measures.length; i += 1) {
             required = calculateMeasureRequiredWidth(score.measures[i], space, symbolScale, noteScale);
+            if (measureHasTimeSignatureChange(score, i)) {
+                required += timeSignatureAreaWidth(timeSignatureForMeasure(score.measures[i], score.timeSignature), space, symbolScale);
+            }
             maximumMeasureWidth = Math.max(maximumMeasureWidth, required);
         }
         return contentStart + rightMargin + maximumMeasureWidth * score.measures.length;
     }
-    function measurePositions(measure, start, width, space, symbolScale, noteScale) {
+    function measurePositions(measure, start, width, space, symbolScale, noteScale, timeSignature) {
         var extents = [];
         var positions = [];
         var required = calculateMeasureRequiredWidth(measure, space, symbolScale, noteScale);
+        var meterTicks = timeSignatureTicks(timeSignature || measure.timeSignature || DEFAULT_TIME_SIGNATURE);
         var gap = 0.4 * space;
         var i;
         var cursor;
@@ -964,7 +1556,7 @@ See THIRD_PARTY_NOTICES.md and the OFL notice next to the embedded glyph data.
         extra = width - required;
         cursor = start + space / 2;
         for (i = 0; i < measure.events.length; i += 1) {
-            positions.push(cursor + extents[i].left + extra * measure.events[i].startTicks / MEASURE_TICKS);
+            positions.push(cursor + extents[i].left + extra * measure.events[i].startTicks / meterTicks);
             cursor += extents[i].left + extents[i].right + gap;
         }
         if (measure.events.length === 1) { positions[0] = start + width / 2; }
@@ -1036,6 +1628,103 @@ See THIRD_PARTY_NOTICES.md and the OFL notice next to the embedded glyph data.
         }
         return averagePosition / events.length < 4 ? "up" : "down";
     }
+    function setEventStemGeometry(eventLayout, direction, stemLength, stemWidth, space) {
+        var noteheads = eventLayout.noteheads || eventNoteheadLayouts(eventLayout.event, eventLayout.noteScale, space);
+        var head = direction === "up" ? noteheads[noteheads.length - 1] : noteheads[0];
+        var headName;
+        var anchor;
+        if (!head) {
+            return;
+        }
+        headName = noteHeadGlyphName(eventBaseNoteValue(eventLayout.event));
+        anchor = direction === "up" ? GLYPHS[headName].anchors.stemUpSE : GLYPHS[headName].anchors.stemDownNW;
+        eventLayout.direction = direction;
+        eventLayout.stemAnchor = anchor;
+        eventLayout.stemX = eventLayout.x + head.xOffset + anchor[0] * eventLayout.noteScale +
+            (direction === "up" ? -stemWidth / 2 : stemWidth / 2);
+        eventLayout.stemBaseY = head.y + anchor[1] * eventLayout.noteScale;
+        eventLayout.stemEndY = eventLayout.stemBaseY + (direction === "up" ? -stemLength : stemLength);
+    }
+    function beamLevelForEventLayout(eventLayout) {
+        var event = eventLayout ? eventLayout.event : null;
+        var notationLevel = event && event.notation ? event.notation.beamLevel : null;
+        if (event && isFiniteNumber(event.beamLevel)) { return event.beamLevel; }
+        if (isFiniteNumber(notationLevel)) { return notationLevel; }
+        return event && eventBaseNoteValue(event) === "sixteenth" ? 2 : 1;
+    }
+    function secondaryBeamYAtX(groupGeometry, x) {
+        var primaryY = groupGeometry.startY + groupGeometry.slope * (x - groupGeometry.firstStemX);
+        return primaryY + (groupGeometry.direction === "up" ? groupGeometry.beamSpacing : -groupGeometry.beamSpacing);
+    }
+    function addSecondaryBeamRun(plan, group, startIndex, endIndex, geometry) {
+        var start = group.events[startIndex];
+        var end = group.events[endIndex];
+        addBeamCommand(plan, "Beam " + group.id + " secondary " + startIndex,
+            start.stemX,
+            secondaryBeamYAtX(geometry, start.stemX),
+            end.stemX,
+            secondaryBeamYAtX(geometry, end.stemX),
+            geometry.beamWidth);
+    }
+    function choosePartialBeamDirection(group, index) {
+        var current = group && group.events ? group.events[index] : null;
+        var event = current ? current.event : null;
+        var explicit = event ? event.partialBeamDirection : null;
+        var previous;
+        var next;
+        var currentLevel;
+        var groupStart;
+        var groupEnd;
+        var currentStart;
+        var previousDistance;
+        var nextDistance;
+        if (!explicit && event && event.notation) { explicit = event.notation.partialBeamDirection; }
+        if (explicit === "forward" || explicit === "backward") { return explicit; }
+        if (!group || !group.events || !current) { return "forward"; }
+        if (index === 0) { return "forward"; }
+        if (index === group.events.length - 1) { return "backward"; }
+        currentLevel = beamLevelForEventLayout(current);
+        previous = group.events[index - 1];
+        next = group.events[index + 1];
+        if (beamLevelForEventLayout(previous) === currentLevel && currentLevel >= 2) { return "backward"; }
+        if (beamLevelForEventLayout(next) === currentLevel && currentLevel >= 2) { return "forward"; }
+        groupStart = group.events[0].event.startTicks;
+        groupEnd = group.events[group.events.length - 1].event.startTicks + group.events[group.events.length - 1].event.durationTicks;
+        currentStart = current.event.startTicks;
+        if (isFiniteNumber(groupStart) && isFiniteNumber(groupEnd) && isFiniteNumber(currentStart) && groupEnd > groupStart) {
+            if (currentStart - groupStart < (groupEnd - groupStart) / 2) { return "forward"; }
+            if (currentStart - groupStart > (groupEnd - groupStart) / 2) { return "backward"; }
+        }
+        previousDistance = Math.abs(current.stemX - previous.stemX);
+        nextDistance = Math.abs(next.stemX - current.stemX);
+        return nextDistance < previousDistance ? "forward" : "backward";
+    }
+    function addPartialBeam(plan, group, index, direction, geometry) {
+        var current = group.events[index];
+        var adjacentIndex = direction === "backward" ? index - 1 : index + 1;
+        var adjacent = group.events[adjacentIndex];
+        var distance;
+        var hookLength;
+        var x1;
+        var x2;
+        if (!current || !adjacent) { return; }
+        distance = Math.abs(adjacent.stemX - current.stemX);
+        hookLength = Math.min(1.2 * geometry.space, distance * 0.45);
+        if (!isFiniteNumber(hookLength) || hookLength <= 0) { return; }
+        if (direction === "backward") {
+            x1 = current.stemX - hookLength;
+            x2 = current.stemX;
+        } else {
+            x1 = current.stemX;
+            x2 = current.stemX + hookLength;
+        }
+        addBeamCommand(plan, "Beam " + group.id + " partial " + index + " " + direction,
+            x1,
+            secondaryBeamYAtX(geometry, x1),
+            x2,
+            secondaryBeamYAtX(geometry, x2),
+            geometry.beamWidth);
+    }
     function setStemAndBeamGeometry(measureLayout, settings, space) {
         var groups = collectBeamGroups(measureLayout);
         var i;
@@ -1050,10 +1739,9 @@ See THIRD_PARTY_NOTICES.md and the OFL notice next to the embedded glyph data.
         var eventLayout;
         var x;
         var lineY;
-        var secondaryStart;
-        var secondaryEnd;
         var runStart;
         var runEnd;
+        var beamGeometry;
         var beamWidth = effectiveThickness(settings.beamThickness, space, settings.globalThickness);
         var beamSpacing = beamWidth + ENGRAVING_DEFAULTS.beamSpacing * space;
         var stemLength = Math.max(3.5 * space, 3.5 * space * settings.noteScale / 100);
@@ -1061,26 +1749,17 @@ See THIRD_PARTY_NOTICES.md and the OFL notice next to the embedded glyph data.
         var shift;
         for (i = 0; i < measureLayout.events.length; i += 1) {
             eventLayout = measureLayout.events[i];
-            if (eventLayout.event.type !== "note" || eventLayout.event.noteValue === "whole") {
+            if (!isPitchedEvent(eventLayout.event) || eventBaseNoteValue(eventLayout.event) === "whole") {
                 continue;
             }
-            eventLayout.stemAnchor = eventLayout.direction === "up" ?
-                GLYPHS[noteHeadGlyphName(eventLayout.event.noteValue)].anchors.stemUpSE :
-                GLYPHS[noteHeadGlyphName(eventLayout.event.noteValue)].anchors.stemDownNW;
-            eventLayout.stemX = eventLayout.x + eventLayout.stemAnchor[0] * eventLayout.noteScale + (eventLayout.direction === "up" ? -stemWidth / 2 : stemWidth / 2);
-            eventLayout.stemBaseY = eventLayout.y + eventLayout.stemAnchor[1] * eventLayout.noteScale;
-            eventLayout.stemEndY = eventLayout.stemBaseY + (eventLayout.direction === "up" ? -stemLength : stemLength);
+            setEventStemGeometry(eventLayout, eventLayout.direction, stemLength, stemWidth, space);
         }
         for (i = 0; i < groups.length; i += 1) {
             group = groups[i];
             group.direction = chooseBeamStemDirection(group.events);
             for (j = 0; j < group.events.length; j += 1) {
                 group.events[j].direction = group.direction;
-                group.events[j].stemAnchor = group.direction === "up" ?
-                    GLYPHS[noteHeadGlyphName(group.events[j].event.noteValue)].anchors.stemUpSE :
-                    GLYPHS[noteHeadGlyphName(group.events[j].event.noteValue)].anchors.stemDownNW;
-                group.events[j].stemX = group.events[j].x + group.events[j].stemAnchor[0] * group.events[j].noteScale + (group.direction === "up" ? -stemWidth / 2 : stemWidth / 2);
-                group.events[j].stemBaseY = group.events[j].y + group.events[j].stemAnchor[1] * group.events[j].noteScale;
+                setEventStemGeometry(group.events[j], group.direction, stemLength, stemWidth, space);
             }
             first = group.events[0];
             last = group.events[group.events.length - 1];
@@ -1105,6 +1784,17 @@ See THIRD_PARTY_NOTICES.md and the OFL notice next to the embedded glyph data.
             }
             startY += shift;
             endY += shift;
+            beamGeometry = {
+                firstStemX: first.stemX,
+                lastStemX: last.stemX,
+                startY: startY,
+                endY: endY,
+                slope: dx !== 0 ? (endY - startY) / dx : 0,
+                direction: group.direction,
+                beamSpacing: beamSpacing,
+                beamWidth: beamWidth,
+                space: space
+            };
             for (j = 0; j < group.events.length; j += 1) {
                 eventLayout = group.events[j];
                 x = eventLayout.stemX;
@@ -1115,21 +1805,17 @@ See THIRD_PARTY_NOTICES.md and the OFL notice next to the embedded glyph data.
                 beamWidth);
             runStart = -1;
             for (j = 0; j <= group.events.length; j += 1) {
-                if (j < group.events.length && group.events[j].event.noteValue === "sixteenth") {
+                if (j < group.events.length && beamLevelForEventLayout(group.events[j]) >= 2) {
                     if (runStart < 0) {
                         runStart = j;
                     }
                 } else if (runStart >= 0) {
                     runEnd = j - 1;
                     if (runEnd - runStart >= 1) {
-                        secondaryStart = group.events[runStart];
-                        secondaryEnd = group.events[runEnd];
-                        addBeamCommand(measureLayout.plan, "Beam " + group.id + " secondary " + runStart,
-                            secondaryStart.stemX,
-                            secondaryStart.stemEndY + (group.direction === "up" ? beamSpacing : -beamSpacing),
-                            secondaryEnd.stemX,
-                            secondaryEnd.stemEndY + (group.direction === "up" ? beamSpacing : -beamSpacing),
-                            beamWidth);
+                        addSecondaryBeamRun(measureLayout.plan, group, runStart, runEnd, beamGeometry);
+                    } else {
+                        addPartialBeam(measureLayout.plan, group, runStart,
+                            choosePartialBeamDirection(group, runStart), beamGeometry);
                     }
                     runStart = -1;
                 }
@@ -1145,7 +1831,8 @@ See THIRD_PARTY_NOTICES.md and the OFL notice next to the embedded glyph data.
         var barlineThickness = effectiveThickness(settings.barlineThickness, space, settings.globalThickness);
         var leftMargin = 1.00 * space;
         var clefArea = (GLYPHS.gClef.nominalWidth * symbolScale + 0.8) * space;
-        var timeArea = (GLYPHS.timeSig4.nominalWidth * symbolScale + 0.8) * space;
+        var initialTimeSignature = score.measures.length > 0 ? timeSignatureForMeasure(score.measures[0], score.timeSignature) : cloneTimeSignature(score.timeSignature || DEFAULT_TIME_SIGNATURE);
+        var timeArea = timeSignatureAreaWidth(initialTimeSignature, space, symbolScale);
         var rightMargin = 0.80 * space;
         var contentStart = leftMargin + clefArea + timeArea;
         var usableWidth = settings.length - contentStart - rightMargin;
@@ -1163,51 +1850,71 @@ See THIRD_PARTY_NOTICES.md and the OFL notice next to the embedded glyph data.
         var positions;
         var noteScale;
         var eventLayout;
-        var staffPosition;
         var stemThickness = effectiveThickness(settings.stemThickness, space, settings.globalThickness);
-        var accidentalScale;
-        var accidentalName;
-        var accidentalX;
+        var tieThickness = tieThicknessForStaff(stemThickness, space, settings.globalThickness);
+        var tiedEventLayouts = [];
         var headName;
         var anchor;
         var flagName;
-        var timeScale;
+        var staffRange;
+        var noteheads;
+        var noteheadIndex;
+        var noteheadLayout;
+        var timeSignature;
+        var leadingTimeArea;
+        var eventStart;
+        var eventWidth;
         if (usableWidth <= 0) {
             throw new Error("Length is too short. Click Auto Adjust or increase Length.");
         }
         measureWidth = usableWidth / settings.measures;
         noteScale = space * noteScaleMultiplier;
-        accidentalScale = space * symbolScale;
         for (lineIndex = 0; lineIndex < 5; lineIndex += 1) {
             addLineCommand(plan, "STAFF", "Line " + (lineIndex + 1), 0, lineIndex * space, settings.length, lineIndex * space, staffThickness);
         }
         addGlyphCommand(plan, "CLEF", "Treble Clef", "gClef", leftMargin + GLYPHS.gClef.nominalWidth * space * symbolScale / 2, 3 * space, space * symbolScale, {});
-        timeScale = space * symbolScale;
-        addGlyphCommand(plan, "TIME_SIGNATURE", "Time Signature Numerator", "timeSig4", leftMargin + clefArea + GLYPHS.timeSig4.nominalWidth * timeScale / 2, space, timeScale, {});
-        addGlyphCommand(plan, "TIME_SIGNATURE", "Time Signature Denominator", "timeSig4", leftMargin + clefArea + GLYPHS.timeSig4.nominalWidth * timeScale / 2, 3 * space, timeScale, {});
+        addTimeSignatureCommands(plan, initialTimeSignature,
+            leftMargin + clefArea + timeSignatureContentWidth(initialTimeSignature, space, symbolScale) / 2,
+            space, symbolScale, "Time Signature");
         for (measureIndex = 1; measureIndex <= settings.measures; measureIndex += 1) {
             boundaryX = contentStart + measureWidth * measureIndex;
             addLineCommand(plan, "BARLINES", "Barline " + measureIndex, boundaryX, 0, boundaryX, 4 * space, barlineThickness);
         }
         for (measureIndex = 0; measureIndex < score.measures.length; measureIndex += 1) {
             measure = score.measures[measureIndex];
+            timeSignature = timeSignatureForMeasure(measure, score.timeSignature);
             measureStart = contentStart + measureWidth * measureIndex;
-            measureLayout = { plan: plan, measure: measure, events: [], startX: measureStart, width: measureWidth };
-            positions = measurePositions(measure, measureStart, measureWidth, space, symbolScale, noteScale);
+            leadingTimeArea = measureHasTimeSignatureChange(score, measureIndex) ? timeSignatureAreaWidth(timeSignature, space, symbolScale) : 0;
+            eventStart = measureStart + leadingTimeArea;
+            eventWidth = measureWidth - leadingTimeArea;
+            if (eventWidth <= 0) { throw new Error("Measure " + (measureIndex + 1) + " has no room after its time signature change."); }
+            if (leadingTimeArea > 0) {
+                addTimeSignatureCommands(plan, timeSignature,
+                    measureStart + timeSignatureContentWidth(timeSignature, space, symbolScale) / 2,
+                    space, symbolScale, "Time Signature " + (measureIndex + 1));
+            }
+            measureLayout = { plan: plan, measure: measure, events: [], startX: eventStart, width: eventWidth };
+            positions = measurePositions(measure, eventStart, eventWidth, space, symbolScale, noteScale, timeSignature);
             for (eventIndex = 0; eventIndex < measure.events.length; eventIndex += 1) {
                 event = measure.events[eventIndex];
                 eventX = positions[eventIndex];
-                if (event.type === "note") {
-                    staffPosition = staffPositionForPitch(event.pitch);
+                if (isPitchedEvent(event)) {
+                    staffRange = eventStaffPositionRange(event);
+                    noteheads = eventNoteheadLayouts(event, noteScale, space);
+                    assignAccidentalColumns(noteheads);
                     eventLayout = {
                         event: event,
-                        name: "Note " + (measureIndex + 1) + "-" + (eventIndex + 1),
+                        name: (event.type === "chord" ? "Chord " : "Note ") + (measureIndex + 1) + "-" + (eventIndex + 1),
                         x: eventX,
-                        y: yForStaffPosition(staffPosition, space),
-                        staffPosition: staffPosition,
+                        y: yForStaffPosition(staffRange.center, space),
+                        staffPosition: staffRange.center,
+                        staffRange: staffRange,
+                        noteheads: noteheads,
                         noteScale: noteScale,
-                        direction: staffPosition < 4 ? "up" : "down",
-                        measureStart: measureStart
+                        direction: eventStemDirection(event),
+                        measureStart: eventStart,
+                        measureIndex: measureIndex,
+                        measureEndX: eventStart + eventWidth
                     };
                 } else {
                     eventLayout = {
@@ -1218,10 +1925,15 @@ See THIRD_PARTY_NOTICES.md and the OFL notice next to the embedded glyph data.
                         staffPosition: 4,
                         noteScale: noteScale,
                         direction: "up",
-                        measureStart: measureStart
+                        measureStart: eventStart,
+                        measureIndex: measureIndex,
+                        measureEndX: eventStart + eventWidth
                     };
                 }
                 measureLayout.events.push(eventLayout);
+                if (event.tieGroupId !== undefined && event.tieGroupId !== null) {
+                    tiedEventLayouts.push(eventLayout);
+                }
             }
             setStemAndBeamGeometry(measureLayout, settings, space);
             for (eventIndex = 0; eventIndex < measureLayout.events.length; eventIndex += 1) {
@@ -1229,32 +1941,24 @@ See THIRD_PARTY_NOTICES.md and the OFL notice next to the embedded glyph data.
                 event = eventLayout.event;
                 if (event.type === "rest") {
                     addGlyphCommand(plan, "RESTS", eventLayout.name, "rest" + event.noteValue.charAt(0).toUpperCase() + event.noteValue.substr(1), eventLayout.x, eventLayout.y, space * symbolScale, {});
+                    addAugmentationDots(plan, eventLayout, space, symbolScale);
                     continue;
                 }
                 addLedgerCommands(plan, eventLayout, space, ledgerThickness, ENGRAVING_DEFAULTS.legerLineExtension * space);
                 headName = noteHeadGlyphName(event.noteValue);
-                addGlyphCommand(plan, "NOTES", eventLayout.name, headName, eventLayout.x, eventLayout.y, noteScale, {});
-                if (event.notation.accidental) {
-                    if (event.notation.accidental === "sharp") {
-                        accidentalName = "accidentalSharp";
-                    } else if (event.notation.accidental === "flat") {
-                        accidentalName = "accidentalFlat";
-                    } else {
-                        accidentalName = "accidentalNatural";
-                    }
-                    accidentalX = eventLayout.x + GLYPHS[headName].bbox.sw[0] * noteScale - 0.25 * space - GLYPHS[accidentalName].bbox.ne[0] * accidentalScale;
-                    addGlyphCommand(plan, "ACCIDENTALS", eventLayout.name + " accidental", accidentalName, accidentalX, eventLayout.y, accidentalScale, {});
+                for (noteheadIndex = 0; noteheadIndex < eventLayout.noteheads.length; noteheadIndex += 1) {
+                    noteheadLayout = eventLayout.noteheads[noteheadIndex];
+                    addGlyphCommand(plan, "NOTES", eventLayout.name + " head " + (noteheadIndex + 1), headName,
+                        eventLayout.x + noteheadLayout.xOffset, noteheadLayout.y, noteScale, {});
                 }
+                addImportedAccidentalCommands(plan, eventLayout, space, symbolScale);
                 if (event.noteValue !== "whole") {
-                    anchor = eventLayout.direction === "up" ? GLYPHS[headName].anchors.stemUpSE : GLYPHS[headName].anchors.stemDownNW;
-                    eventLayout.stemX = eventLayout.x + anchor[0] * noteScale + (eventLayout.direction === "up" ? -stemThickness / 2 : stemThickness / 2);
-                    eventLayout.stemBaseY = eventLayout.y + anchor[1] * noteScale;
                     addLineCommand(plan, "NOTES", eventLayout.name + " stem", eventLayout.stemX, eventLayout.stemBaseY, eventLayout.stemX, eventLayout.stemEndY, stemThickness);
                     if (!event.beamGroupId) {
                         flagName = null;
-                        if (event.noteValue === "eighth") {
+                        if (eventBaseNoteValue(event) === "eighth") {
                             flagName = eventLayout.direction === "up" ? "flagEighthUp" : "flagEighthDown";
-                        } else if (event.noteValue === "sixteenth") {
+                        } else if (eventBaseNoteValue(event) === "sixteenth") {
                             flagName = eventLayout.direction === "up" ? "flagSixteenthUp" : "flagSixteenthDown";
                         }
                         if (flagName) {
@@ -1263,8 +1967,10 @@ See THIRD_PARTY_NOTICES.md and the OFL notice next to the embedded glyph data.
                         }
                     }
                 }
+                addAugmentationDots(plan, eventLayout, space, symbolScale);
             }
         }
+        addMidiTieCommands(plan, tiedEventLayouts, space, tieThickness);
         return plan;
     }
     function validateRenderPlan(plan) {
@@ -1341,7 +2047,7 @@ See THIRD_PARTY_NOTICES.md and the OFL notice next to the embedded glyph data.
         var changeKeys = ["length", "staffSize", "noteScale", "symbolScale"];
         var changeLabels = {
             length: "Length",
-            staffSize: "Staff Size",
+            staffSize: "Staff Space",
             noteScale: "Note Scale",
             symbolScale: "Symbol Scale"
         };
@@ -1371,7 +2077,7 @@ See THIRD_PARTY_NOTICES.md and the OFL notice next to the embedded glyph data.
             minimumLength = calculateMinimumLength(score, fitted);
         }
         if (minimumLength > MAX_LENGTH) {
-            throw new Error("The current settings do not fit within the maximum Length of " + MAX_LENGTH + " px. Adjust Staff Size, Note Scale, Symbol Scale, or Measures manually.");
+            throw new Error("The current settings do not fit within the maximum Length of " + MAX_LENGTH + " px. Adjust Staff Space, Note Scale, Symbol Scale, or Measures manually.");
         }
         targetLength = Math.max(fitted.length, Math.ceil(minimumLength));
         fitted.length = clamp(targetLength, MIN_LENGTH, MAX_LENGTH);
@@ -1497,8 +2203,8 @@ See THIRD_PARTY_NOTICES.md and the OFL notice next to the embedded glyph data.
             dropdown.add("item", choices[i].label);
         }
         selectPresetChoice(dropdown, choices, savedId);
-        labelControl.helpTip = "Select a built-in generation style. Layout and appearance are preserved.";
-        dropdown.helpTip = "Select a style, review the values, then click Generate.";
+        labelControl.helpTip = "Select a built-in style for generated scores. Import preserves source notation and does not use this preset.";
+        dropdown.helpTip = "Select a style for generated scores, review the values, then click Generate. Import ignores this preset.";
         registerResponsiveRow(responsiveRows, row, labelControl, dropdown, "preset");
         return { control: dropdown, choices: choices };
     }
@@ -1517,7 +2223,7 @@ See THIRD_PARTY_NOTICES.md and the OFL notice next to the embedded glyph data.
         var symbolScale = settings.symbolScale / 100;
         var leftMargin = 1.00 * space;
         var clefArea = (GLYPHS.gClef.nominalWidth * symbolScale + 0.8) * space;
-        var timeArea = (GLYPHS.timeSig4.nominalWidth * symbolScale + 0.8) * space;
+        var timeArea = timeSignatureAreaWidth(DEFAULT_TIME_SIGNATURE, space, symbolScale);
         var rightMargin = 0.80 * space;
         var contentStart = leftMargin + clefArea + timeArea;
         var usableWidth = settings.length - contentStart - rightMargin;
@@ -1962,6 +2668,7 @@ See THIRD_PARTY_NOTICES.md and the OFL notice next to the embedded glyph data.
     }
     function serializeMetadata(score, settings) {
         var fields = [];
+        var metadataTimeSignature = score.measures && score.measures.length > 0 ? timeSignatureForMeasure(score.measures[0], score.timeSignature) : cloneTimeSignature(score.timeSignature || DEFAULT_TIME_SIGNATURE);
         function add(key, value) {
             fields.push(key + "=" + encodeMetadataValue(value));
         }
@@ -1981,7 +2688,7 @@ See THIRD_PARTY_NOTICES.md and the OFL notice next to the embedded glyph data.
         add("staff.positionY", settings.positionY);
         add("staff.overallScale", settings.overallScale);
         add("score.measures", settings.measures);
-        add("score.timeSignature", "4/4");
+        add("score.timeSignature", timeSignatureLabel(metadataTimeSignature));
         add("score.key", "C Major");
         add("score.clef", "treble");
         add("generation.rhythmDensity", settings.rhythmDensity);
@@ -2247,7 +2954,7 @@ See THIRD_PARTY_NOTICES.md and the OFL notice next to the embedded glyph data.
         var highPitch = parsePitchText(highText);
         var settings = {};
         settings.length = readNumber(ui.length, "Length", MIN_LENGTH, MAX_LENGTH, false, numericErrors, rangeErrors);
-        settings.staffSize = readNumber(ui.staffSize, "Staff Size", MIN_STAFF_SIZE, 100, false, numericErrors, rangeErrors);
+        settings.staffSize = readNumber(ui.staffSize, "Staff Space", MIN_STAFF_SIZE, 100, false, numericErrors, rangeErrors);
         settings.staffLineThickness = readNumber(ui.staffLineThickness, "Staff Line Thickness", 0.1, 20, false, numericErrors, rangeErrors);
         settings.positionX = readNumber(ui.positionX, "Position X", -100000, 100000, false, numericErrors, rangeErrors);
         settings.positionY = readNumber(ui.positionY, "Position Y", -100000, 100000, false, numericErrors, rangeErrors);
@@ -2650,6 +3357,1377 @@ See THIRD_PARTY_NOTICES.md and the OFL notice next to the embedded glyph data.
         }
         return updated;
     }
+var IMPORT_GRID_TICKS = 120;
+var IMPORT_MAX_MEASURES = 64;
+var IMPORT_EXTENSIONS = { mid: true, midi: true, musicxml: true, xml: true, mxl: true };
+var IMPORT_DURATION_TABLE = [
+    { ticks: 1920, noteValue: "whole", dots: 0 },
+    { ticks: 1440, noteValue: "half", dots: 1 },
+    { ticks: 960, noteValue: "half", dots: 0 },
+    { ticks: 720, noteValue: "quarter", dots: 1 },
+    { ticks: 480, noteValue: "quarter", dots: 0 },
+    { ticks: 360, noteValue: "eighth", dots: 1 },
+    { ticks: 240, noteValue: "eighth", dots: 0 },
+    { ticks: 120, noteValue: "sixteenth", dots: 0 }
+];
+function importExtension(pathText) {
+    var text = trimString(pathText || "");
+    var slash = Math.max(text.lastIndexOf("/"), text.lastIndexOf("\\"));
+    var dot = text.lastIndexOf(".");
+    if (dot <= slash) { return ""; }
+    return text.substr(dot + 1).toLowerCase();
+}
+function normalizeImportPath(pathText) {
+    var text = trimString(pathText || "");
+    if (text.length >= 2 && ((text.charAt(0) === '"' && text.charAt(text.length - 1) === '"') ||
+            (text.charAt(0) === "'" && text.charAt(text.length - 1) === "'"))) {
+        text = text.substring(1, text.length - 1);
+    }
+    return trimString(text);
+}
+function isMacOSForImport() {
+    try { return typeof $ !== "undefined" && /mac/i.test($.os); } catch (error) { return false; }
+}
+function browseImportFile() {
+    var filter;
+    if (isMacOSForImport()) {
+        filter = function (entry) {
+            if (typeof Folder !== "undefined" && entry instanceof Folder) { return true; }
+            return /\.(mid|midi|musicxml|xml|mxl)$/i.test(entry.name || "");
+        };
+    } else {
+        filter = "MIDI / MusicXML:*.mid;*.midi;*.musicxml;*.xml;*.mxl";
+    }
+    return File.openDialog("Select a MIDI or MusicXML file", filter, false);
+}
+function readImportBinary(file) {
+    var bytes = [];
+    var text;
+    var i;
+    if (!file || !file.exists) { throw new Error("Import file was not found."); }
+    file.encoding = "BINARY";
+    if (!file.open("r")) { throw new Error("Could not open import file: " + file.fsName); }
+    try { text = file.read(); } finally { file.close(); }
+    for (i = 0; i < text.length; i += 1) { bytes.push(text.charCodeAt(i) & 255); }
+    return bytes;
+}
+function readImportText(file) {
+    var text;
+    if (!file || !file.exists) { throw new Error("Import file was not found."); }
+    file.encoding = "UTF-8";
+    if (!file.open("r")) { throw new Error("Could not open import file: " + file.fsName); }
+    try { text = file.read(); } finally { file.close(); }
+    return text;
+}
+function importReadU16(bytes, offset) { return ((bytes[offset] << 8) | bytes[offset + 1]) >>> 0; }
+function importReadU32(bytes, offset) {
+    return (((bytes[offset] * 16777216) + (bytes[offset + 1] << 16) + (bytes[offset + 2] << 8) + bytes[offset + 3]) >>> 0);
+}
+function importAscii(bytes, offset, count) {
+    var result = "";
+    var i;
+    for (i = 0; i < count; i += 1) { result += String.fromCharCode(bytes[offset + i]); }
+    return result;
+}
+function importReadVlq(bytes, state, limit) {
+    var value = 0;
+    var count = 0;
+    var b;
+    do {
+        if (state.offset >= limit || count >= 4) { throw new Error("Invalid MIDI variable-length quantity."); }
+        b = bytes[state.offset++];
+        value = (value * 128) + (b & 127);
+        count += 1;
+    } while (b & 128);
+    return value;
+}
+function midiDataLength(status) {
+    var high = status & 240;
+    if (high === 192 || high === 208) { return 1; }
+    if (high >= 128 && high <= 224) { return 2; }
+    return -1;
+}
+function midiSignedByte(value) { return value > 127 ? value - 256 : value; }
+function midiText(data) {
+    var text = "";
+    var i;
+    for (i = 0; i < data.length; i += 1) {
+        if (data[i] >= 32 && data[i] <= 126) { text += String.fromCharCode(data[i]); }
+    }
+    return text;
+}
+function parseMidiBytes(bytes) {
+    var headerLength;
+    var format;
+    var trackCount;
+    var division;
+    var offset;
+    var trackIndex;
+    var trackLength;
+    var trackEnd;
+    var state;
+    var absoluteTick;
+    var runningStatus;
+    var first;
+    var status;
+    var dataLength;
+    var data1;
+    var data2;
+    var metaType;
+    var dataCount;
+    var data;
+    var i;
+    var channel;
+    var pitch;
+    var velocity;
+    var key;
+    var active;
+    var laneMap = {};
+    var lanes = [];
+    var trackNames = [];
+    var timeSignatures = [];
+    var keySignatures = [];
+    var lane;
+    var activeKey;
+    var note;
+    if (!bytes || bytes.length < 14 || importAscii(bytes, 0, 4) !== "MThd") {
+        throw new Error("This is not a Standard MIDI File (missing MThd header).");
+    }
+    headerLength = importReadU32(bytes, 4);
+    if (headerLength < 6 || 8 + headerLength > bytes.length) { throw new Error("Invalid MIDI header length."); }
+    format = importReadU16(bytes, 8);
+    trackCount = importReadU16(bytes, 10);
+    division = importReadU16(bytes, 12);
+    if (format !== 0 && format !== 1) { throw new Error("MIDI format " + format + " is not supported. Use Standard MIDI File format 0 or 1."); }
+    if (division & 32768) { throw new Error("SMPTE-timed MIDI files are not supported. Export MIDI using ticks-per-quarter-note timing."); }
+    if (division <= 0) { throw new Error("MIDI ticks-per-quarter-note value is invalid."); }
+    offset = 8 + headerLength;
+    active = {};
+    for (trackIndex = 0; trackIndex < trackCount; trackIndex += 1) {
+        if (offset + 8 > bytes.length || importAscii(bytes, offset, 4) !== "MTrk") { throw new Error("Invalid MIDI track chunk at track " + (trackIndex + 1) + "."); }
+        trackLength = importReadU32(bytes, offset + 4);
+        offset += 8;
+        trackEnd = offset + trackLength;
+        if (trackEnd > bytes.length) { throw new Error("MIDI track " + (trackIndex + 1) + " extends past the end of the file."); }
+        state = { offset: offset };
+        absoluteTick = 0;
+        runningStatus = -1;
+        active[trackIndex] = {};
+        while (state.offset < trackEnd) {
+            absoluteTick += importReadVlq(bytes, state, trackEnd);
+            if (state.offset >= trackEnd) { break; }
+            first = bytes[state.offset++];
+            if (first < 128) {
+                if (runningStatus < 128 || runningStatus >= 240) { throw new Error("Invalid MIDI running status in track " + (trackIndex + 1) + "."); }
+                status = runningStatus;
+                data1 = first;
+            } else {
+                status = first;
+                data1 = null;
+                if (status < 240) { runningStatus = status; }
+                else if (status === 240 || status === 247 || status === 255) { runningStatus = -1; }
+            }
+            if (status === 255) {
+                if (state.offset >= trackEnd) { throw new Error("Truncated MIDI meta event."); }
+                metaType = bytes[state.offset++];
+                dataCount = importReadVlq(bytes, state, trackEnd);
+                if (state.offset + dataCount > trackEnd) { throw new Error("Truncated MIDI meta event data."); }
+                data = bytes.slice(state.offset, state.offset + dataCount);
+                state.offset += dataCount;
+                if (metaType === 3) { trackNames[trackIndex] = midiText(data); }
+                else if (metaType === 88 && data.length >= 2) {
+                    timeSignatures.push({ tick: absoluteTick, numerator: data[0], denominator: Math.pow(2, data[1]), track: trackIndex });
+                } else if (metaType === 89 && data.length >= 1) {
+                    keySignatures.push({ tick: absoluteTick, fifths: midiSignedByte(data[0]), track: trackIndex });
+                } else if (metaType === 47) { break; }
+                continue;
+            }
+            if (status === 240 || status === 247) {
+                dataCount = importReadVlq(bytes, state, trackEnd);
+                if (state.offset + dataCount > trackEnd) { throw new Error("Truncated MIDI SysEx event."); }
+                state.offset += dataCount;
+                continue;
+            }
+            dataLength = midiDataLength(status);
+            if (dataLength < 0) { throw new Error("Unsupported MIDI status 0x" + status.toString(16) + "."); }
+            if (data1 === null) {
+                if (state.offset >= trackEnd) { throw new Error("Truncated MIDI channel event."); }
+                data1 = bytes[state.offset++];
+            }
+            data2 = 0;
+            if (dataLength === 2) {
+                if (state.offset >= trackEnd) { throw new Error("Truncated MIDI channel event."); }
+                data2 = bytes[state.offset++];
+            }
+            channel = status & 15;
+            if ((status & 240) === 144 || (status & 240) === 128) {
+                pitch = data1;
+                velocity = data2;
+                key = channel + ":" + pitch;
+                activeKey = active[trackIndex][key];
+                if ((status & 240) === 144 && velocity > 0) {
+                    if (!activeKey) { activeKey = []; active[trackIndex][key] = activeKey; }
+                    activeKey.push({ tick: absoluteTick, velocity: velocity });
+                } else if (activeKey && activeKey.length > 0) {
+                    note = activeKey.shift();
+                    key = trackIndex + ":" + channel;
+                    lane = laneMap[key];
+                    if (!lane) {
+                        lane = { id: key, trackIndex: trackIndex, channel: channel, name: "", rawNotes: [], sourceType: "midi" };
+                        laneMap[key] = lane;
+                        lanes.push(lane);
+                    }
+                    if (absoluteTick > note.tick) { lane.rawNotes.push({ start: note.tick, end: absoluteTick, midi: pitch, velocity: note.velocity }); }
+                }
+            }
+        }
+        offset = trackEnd;
+    }
+    for (i = 0; i < lanes.length; i += 1) {
+        lanes[i].name = (trackNames[lanes[i].trackIndex] || ("Track " + (lanes[i].trackIndex + 1))) + " / Ch " + (lanes[i].channel + 1);
+        lanes[i].isPercussion = lanes[i].channel === 9;
+        lanes[i].rawNotes.sort(function (a, b) { return a.start - b.start || a.midi - b.midi; });
+    }
+    timeSignatures.sort(function (a, b) { return a.tick - b.tick; });
+    keySignatures.sort(function (a, b) { return a.tick - b.tick; });
+    return { type: "midi", format: format, division: division, lanes: lanes, timeSignatures: timeSignatures, keySignatures: keySignatures, warnings: [] };
+}
+function keyFifthsAtMidiTick(document, tick) {
+    var fifths = 0;
+    var i;
+    for (i = 0; i < document.keySignatures.length; i += 1) {
+        if (document.keySignatures[i].tick > tick) { break; }
+        fifths = document.keySignatures[i].fifths;
+    }
+    return fifths;
+}
+function midiPitchToSpelledPitch(midi, fifths) {
+    var sharpNames = [["C",0],["C",1],["D",0],["D",1],["E",0],["F",0],["F",1],["G",0],["G",1],["A",0],["A",1],["B",0]];
+    var flatNames = [["C",0],["D",-1],["D",0],["E",-1],["E",0],["F",0],["G",-1],["G",0],["A",-1],["A",0],["B",-1],["B",0]];
+    var pitchClass = ((midi % 12) + 12) % 12;
+    var item = fifths < 0 ? flatNames[pitchClass] : sharpNames[pitchClass];
+    return { step: item[0], alter: item[1], octave: Math.floor(midi / 12) - 1, midi: midi };
+}
+function normalizedMidiTimeSignatureChanges(document) {
+    var result = [];
+    var i;
+    var source;
+    var signature;
+    var tick;
+    var last;
+    for (i = 0; i < document.timeSignatures.length; i += 1) {
+        source = document.timeSignatures[i];
+        signature = normalizeTimeSignature(source.numerator, source.denominator);
+        if (!signature) {
+            throw new Error("Unsupported MIDI time signature " + source.numerator + "/" + source.denominator + " at tick " + source.tick + ". Supported denominators are 2, 4, 8, and 16; numerator must be 1-32.");
+        }
+        tick = Math.round(source.tick * TICKS_PER_QUARTER / document.division);
+        last = result.length > 0 ? result[result.length - 1] : null;
+        if (last && last.tick === tick) {
+            if (!timeSignatureEquals(last.signature, signature)) {
+                throw new Error("MIDI contains conflicting time signatures at tick " + source.tick + ".");
+            }
+            continue;
+        }
+        if (last && timeSignatureEquals(last.signature, signature)) { continue; }
+        result.push({ tick: tick, signature: signature });
+    }
+    if (result.length === 0 || result[0].tick > 0) {
+        result.unshift({ tick: 0, signature: cloneTimeSignature(DEFAULT_TIME_SIGNATURE) });
+    }
+    return result;
+}
+function buildMidiMeasureMap(document, maxEnd) {
+    var changes = normalizedMidiTimeSignatureChanges(document);
+    var result = [];
+    var changeIndex = 0;
+    var start = 0;
+    var end;
+    var signature = cloneTimeSignature(DEFAULT_TIME_SIGNATURE);
+    var change;
+    var nextChange;
+    var limit = Math.max(1, IMPORT_MAX_MEASURES + 1);
+    while (result.length === 0 || start < maxEnd) {
+        while (changeIndex < changes.length && changes[changeIndex].tick < start) {
+            throw new Error("MIDI time signature change at tick " + changes[changeIndex].tick + " is not aligned to a measure boundary.");
+        }
+        if (changeIndex < changes.length && changes[changeIndex].tick === start) {
+            signature = cloneTimeSignature(changes[changeIndex].signature);
+            changeIndex += 1;
+        }
+        end = start + timeSignatureTicks(signature);
+        nextChange = changeIndex < changes.length ? changes[changeIndex] : null;
+        if (nextChange && nextChange.tick < end && nextChange.tick < maxEnd) {
+            throw new Error("MIDI time signature change at tick " + nextChange.tick + " is not aligned to a measure boundary. The current importer supports changes between measures only.");
+        }
+        result.push({ index: result.length, start: start, end: end, timeSignature: cloneTimeSignature(signature) });
+        start = end;
+        if (result.length > limit) {
+            throw new Error("Import contains more than " + IMPORT_MAX_MEASURES + " measures. The current importer supports up to " + IMPORT_MAX_MEASURES + " measures per generated staff.");
+        }
+    }
+    return result;
+}
+function midiMeasureIndexForTick(measureMap, tick) {
+    var i;
+    for (i = 0; i < measureMap.length; i += 1) {
+        if (tick >= measureMap[i].start && tick < measureMap[i].end) { return i; }
+    }
+    return -1;
+}
+function quantizeMidiLane(document, lane) {
+    var result = [];
+    var i;
+    var raw;
+    var start;
+    var end;
+    for (i = 0; i < lane.rawNotes.length; i += 1) {
+        raw = lane.rawNotes[i];
+        start = Math.round((raw.start * TICKS_PER_QUARTER / document.division) / IMPORT_GRID_TICKS) * IMPORT_GRID_TICKS;
+        end = Math.round((raw.end * TICKS_PER_QUARTER / document.division) / IMPORT_GRID_TICKS) * IMPORT_GRID_TICKS;
+        if (end <= start) { end = start + IMPORT_GRID_TICKS; }
+        result.push({ start: start, end: end, pitch: midiPitchToSpelledPitch(raw.midi, keyFifthsAtMidiTick(document, raw.start)) });
+    }
+    result.sort(function (a, b) { return a.start - b.start || a.pitch.midi - b.pitch.midi; });
+    return result;
+}
+function importXmlDecode(text) {
+    return String(text || "").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, "&").replace(/&#(x[0-9a-fA-F]+|[0-9]+);/g, function (match, value) {
+        var number = value.charAt(0).toLowerCase() === "x" ? parseInt(value.substr(1), 16) : parseInt(value, 10);
+        return isNaN(number) ? match : String.fromCharCode(number);
+    });
+}
+function importXmlName(name) {
+    var colon = name.indexOf(":");
+    return colon >= 0 ? name.substr(colon + 1) : name;
+}
+function parseImportXml(text) {
+    var source = String(text || "").replace(/^\uFEFF/, "");
+    var root = { name: "#document", attrs: {}, children: [], text: "" };
+    var stack = [root];
+    var tokenRe = /<!--[\s\S]*?-->|<\?[^>]*\?>|<!\[CDATA\[[\s\S]*?\]\]>|<!DOCTYPE[\s\S]*?>|<[^>]+>|[^<]+/g;
+    var token;
+    var node;
+    var closing;
+    var selfClosing;
+    var inside;
+    var nameMatch;
+    var attrRe;
+    var attrMatch;
+    while ((token = tokenRe.exec(source)) !== null) {
+        token = token[0];
+        if (token.indexOf("<!--") === 0 || token.indexOf("<?") === 0 || token.indexOf("<!DOCTYPE") === 0) { continue; }
+        if (token.indexOf("<![CDATA[") === 0) {
+            stack[stack.length - 1].text += token.substring(9, token.length - 3);
+            continue;
+        }
+        if (token.charAt(0) !== "<") {
+            stack[stack.length - 1].text += importXmlDecode(token);
+            continue;
+        }
+        closing = /^<\//.test(token);
+        if (closing) {
+            if (stack.length <= 1) { throw new Error("Malformed MusicXML: unexpected closing tag."); }
+            stack.pop();
+            continue;
+        }
+        if (/^<!/.test(token)) { continue; }
+        selfClosing = /\/\s*>$/.test(token);
+        inside = token.substring(1, token.length - (selfClosing ? 2 : 1));
+        nameMatch = /^\s*([^\s\/>]+)/.exec(inside);
+        if (!nameMatch) { continue; }
+        node = { name: importXmlName(nameMatch[1]), attrs: {}, children: [], text: "" };
+        attrRe = /([^\s=]+)\s*=\s*("[^"]*"|'[^']*')/g;
+        while ((attrMatch = attrRe.exec(inside)) !== null) {
+            node.attrs[importXmlName(attrMatch[1])] = importXmlDecode(attrMatch[2].substring(1, attrMatch[2].length - 1));
+        }
+        stack[stack.length - 1].children.push(node);
+        if (!selfClosing) { stack.push(node); }
+    }
+    if (stack.length !== 1 || root.children.length === 0) { throw new Error("Malformed or empty MusicXML file."); }
+    return root.children[0];
+}
+function xmlChildren(node, name) {
+    var result = [];
+    var i;
+    if (!node || !node.children) { return result; }
+    for (i = 0; i < node.children.length; i += 1) { if (node.children[i].name === name) { result.push(node.children[i]); } }
+    return result;
+}
+function xmlChild(node, name) {
+    var children = xmlChildren(node, name);
+    return children.length > 0 ? children[0] : null;
+}
+function xmlText(node, name, fallback) {
+    var child = name ? xmlChild(node, name) : node;
+    var value;
+    if (!child) { return fallback; }
+    value = trimString(child.text || "");
+    return value === "" ? fallback : value;
+}
+function xmlNumber(node, name, fallback) {
+    var value = parseFloat(xmlText(node, name, ""));
+    return isNaN(value) ? fallback : value;
+}
+function applyMusicXmlAttributes(attributes, state, measureNumber) {
+    var timeNode;
+    var beatsText;
+    var beatTypeText;
+    var signature;
+    var clefs;
+    var i;
+    var clef;
+    state.divisions = xmlNumber(attributes, "divisions", state.divisions);
+    if (state.divisions <= 0) {
+        throw new Error("MusicXML divisions must be positive (measure " + measureNumber + ").");
+    }
+    timeNode = xmlChild(attributes, "time");
+    if (timeNode) {
+        beatsText = xmlText(timeNode, "beats", null);
+        beatTypeText = xmlText(timeNode, "beat-type", null);
+        if (!/^\d+$/.test(trimString(beatsText || "")) || !/^\d+$/.test(trimString(beatTypeText || ""))) {
+            throw new Error("Unsupported MusicXML time signature at measure " + measureNumber + ". Only numeric simple meters are supported.");
+        }
+        signature = normalizeTimeSignature(parseInt(beatsText, 10), parseInt(beatTypeText, 10));
+        if (!signature) {
+            throw new Error("Unsupported MusicXML time signature " + beatsText + "/" + beatTypeText + " at measure " + measureNumber + ". Supported denominators are 2, 4, 8, and 16; numerator must be 1-32.");
+        }
+        state.beats = signature.numerator;
+        state.beatType = signature.denominator;
+        state.timeSignature = signature;
+    }
+    clefs = xmlChildren(attributes, "clef");
+    for (i = 0; i < clefs.length; i += 1) {
+        clef = xmlText(clefs[i], "sign", "G") + xmlText(clefs[i], "line", "2");
+        state.clefByStaff[clefs[i].attrs.number || "1"] = clef;
+    }
+}
+function musicXmlPartNames(root) {
+    var map = {};
+    var partList = xmlChild(root, "part-list");
+    var parts = xmlChildren(partList, "score-part");
+    var i;
+    for (i = 0; i < parts.length; i += 1) { map[parts[i].attrs.id || ("P" + (i + 1))] = xmlText(parts[i], "part-name", "Part " + (i + 1)); }
+    return map;
+}
+function musicXmlPartwiseMeasures(root) {
+    var result = [];
+    var parts = xmlChildren(root, "part");
+    var names = musicXmlPartNames(root);
+    var i;
+    for (i = 0; i < parts.length; i += 1) { result.push({ id: parts[i].attrs.id || ("P" + (i + 1)), name: names[parts[i].attrs.id] || ("Part " + (i + 1)), measures: xmlChildren(parts[i], "measure") }); }
+    return result;
+}
+function musicXmlTimewiseMeasures(root) {
+    var names = musicXmlPartNames(root);
+    var measures = xmlChildren(root, "measure");
+    var map = {};
+    var order = [];
+    var i;
+    var j;
+    var parts;
+    var id;
+    for (i = 0; i < measures.length; i += 1) {
+        parts = xmlChildren(measures[i], "part");
+        for (j = 0; j < parts.length; j += 1) {
+            id = parts[j].attrs.id || ("P" + (j + 1));
+            if (!map[id]) { map[id] = { id: id, name: names[id] || id, measures: [] }; order.push(id); }
+            map[id].measures.push(parts[j]);
+        }
+    }
+    parts = [];
+    for (i = 0; i < order.length; i += 1) { parts.push(map[order[i]]); }
+    return parts;
+}
+function musicXmlTypeToNoteValue(sourceType) {
+    var value = trimString(sourceType || "").toLowerCase();
+    if (value === "16th" || value === "sixteenth") {
+        return "sixteenth";
+    }
+    if (value === "whole" || value === "half" || value === "quarter" || value === "eighth") {
+        return value;
+    }
+    return null;
+}
+function musicXmlNoteLocation(measureNumber, staff, voice) {
+    return "measure " + measureNumber + " / Staff " + staff + " / Voice " + voice;
+}
+function parseMusicXmlText(text) {
+    var root = parseImportXml(text);
+    var parts;
+    var lanes = [];
+    var laneMap = {};
+    var p;
+    var m;
+    var i;
+    var part;
+    var measure;
+    var state;
+    var cursor;
+    var previousStartByLane;
+    var lastNoteRecord;
+    var sourceOrder;
+    var child;
+    var duration;
+    var voice;
+    var staff;
+    var laneKey;
+    var lane;
+    var pitchNode;
+    var step;
+    var alter;
+    var octave;
+    var isChord;
+    var startTicks;
+    var durationTicks;
+    var beams;
+    var b;
+    var sourceType;
+    var sourceDots;
+    var chordBaseKey;
+    var chordBaseOrder;
+    var notationNode;
+    var measureNumber;
+    var record;
+    var bi;
+    var partMeasureSignatures;
+    var measureSignature;
+    var laneIndex;
+    if (root.name !== "score-partwise" && root.name !== "score-timewise") { throw new Error("Unsupported MusicXML root: " + root.name + "."); }
+    parts = root.name === "score-partwise" ? musicXmlPartwiseMeasures(root) : musicXmlTimewiseMeasures(root);
+    for (p = 0; p < parts.length; p += 1) {
+        part = parts[p];
+        state = { divisions: 1, beats: 4, beatType: 4, timeSignature: cloneTimeSignature(DEFAULT_TIME_SIGNATURE), clefByStaff: { "1": "G2" } };
+        partMeasureSignatures = [];
+        for (m = 0; m < part.measures.length; m += 1) {
+            measure = part.measures[m];
+            measureNumber = measure.attrs.number || String(m + 1);
+            for (b = 0; b < measure.children.length; b += 1) {
+                if (measure.children[b].name === "attributes") {
+                    applyMusicXmlAttributes(measure.children[b], state, measureNumber);
+                }
+            }
+            measureSignature = cloneTimeSignature(state.timeSignature || { numerator: state.beats, denominator: state.beatType });
+            partMeasureSignatures[m] = measureSignature;
+            cursor = 0;
+            previousStartByLane = {};
+            lastNoteRecord = null;
+            sourceOrder = 0;
+            for (i = 0; i < measure.children.length; i += 1) {
+                child = measure.children[i];
+                if (child.name === "attributes") {
+                    continue;
+                }
+                if (child.name === "backup") { cursor -= xmlNumber(child, "duration", 0); if (cursor < 0) { cursor = 0; } continue; }
+                if (child.name === "forward") { cursor += xmlNumber(child, "duration", 0); continue; }
+                if (child.name !== "note") { continue; }
+                sourceOrder += 1;
+                voice = xmlText(child, "voice", "1");
+                staff = xmlText(child, "staff", "1");
+                if (xmlChild(child, "grace") || xmlChild(child, "cue")) {
+                    throw new Error("Grace and cue notes are not supported yet (" + musicXmlNoteLocation(measureNumber, staff, voice) + ").");
+                }
+                if (xmlChild(child, "time-modification") || xmlChild(xmlChild(child, "notations"), "tuplet")) {
+                    throw new Error("Tuplets are not supported yet (" + musicXmlNoteLocation(measureNumber, staff, voice) + ").");
+                }
+                notationNode = xmlChild(child, "notations");
+                if (xmlChild(child, "tie") || xmlChild(notationNode, "tied") || xmlChild(notationNode, "slur")) {
+                    throw new Error("Tie / Slur notation is not supported yet (" + musicXmlNoteLocation(measureNumber, staff, voice) + ").");
+                }
+                duration = xmlNumber(child, "duration", 0);
+                if (duration <= 0 || state.divisions <= 0) {
+                    throw new Error("MusicXML note duration is missing or invalid (" + musicXmlNoteLocation(measureNumber, staff, voice) + ").");
+                }
+                laneKey = part.id + "|" + staff + "|" + voice;
+                lane = laneMap[laneKey];
+                if (!lane) {
+                    lane = { id: laneKey, name: part.name + " / Staff " + staff + " / Voice " + voice, sourceType: "musicxml", partId: part.id, staff: staff, voice: voice, measureCount: part.measures.length, divisions: state.divisions, timeSignature: { numerator: measureSignature.numerator, denominator: measureSignature.denominator }, measureSignatures: partMeasureSignatures.slice(0), events: [], clef: state.clefByStaff[staff] || "G2", clefByMeasure: [], timeSignatureValid: true };
+                    laneMap[laneKey] = lane;
+                    lanes.push(lane);
+                }
+                lane.measureCount = Math.max(lane.measureCount || 0, m + 1);
+                lane.divisions = state.divisions;
+                lane.timeSignature = { numerator: measureSignature.numerator, denominator: measureSignature.denominator };
+                lane.measureSignatures[m] = cloneTimeSignature(measureSignature);
+                lane.clefByMeasure[m] = state.clefByStaff[staff] || "G2";
+                if ((state.clefByStaff[staff] || "G2") !== "G2") { lane.clef = state.clefByStaff[staff] || "G2"; }
+                isChord = !!xmlChild(child, "chord");
+                chordBaseKey = lastNoteRecord ? lastNoteRecord.laneKey : null;
+                chordBaseOrder = lastNoteRecord ? lastNoteRecord.sourceOrder : -1;
+                startTicks = Math.round(((isChord && previousStartByLane[laneKey] !== undefined ? previousStartByLane[laneKey] : cursor) / state.divisions) * TICKS_PER_QUARTER);
+                durationTicks = Math.round((duration / state.divisions) * TICKS_PER_QUARTER);
+                sourceType = xmlText(child, "type", null);
+                sourceDots = xmlChildren(child, "dot").length;
+                if (sourceDots > 1) {
+                    throw new Error("Double-dotted values are not supported yet (" + musicXmlNoteLocation(measureNumber, staff, voice) + ").");
+                }
+                beams = xmlChildren(child, "beam");
+                b = null;
+                for (bi = 0; bi < beams.length; bi += 1) { if (!beams[bi].attrs.number || beams[bi].attrs.number === "1") { b = trimString(beams[bi].text || "").toLowerCase(); break; } }
+                record = { measure: m, measureNumber: measureNumber, start: startTicks, duration: durationTicks, sourceDuration: duration, sourceDivisions: state.divisions, sourceType: sourceType, sourceDots: sourceDots, beam: b, laneKey: laneKey, sourceOrder: sourceOrder, sourceChildOrder: i, chordContinuation: isChord, chordBaseKey: chordBaseKey, chordBaseOrder: chordBaseOrder, chordBaseChildOrder: lastNoteRecord ? lastNoteRecord.sourceChildOrder : -1, sourceStaff: staff, sourceVoice: voice };
+                if (xmlChild(child, "rest")) {
+                    if (isChord) {
+                        throw new Error("A <chord/> continuation cannot be a rest (" + musicXmlNoteLocation(measureNumber, staff, voice) + ").");
+                    }
+                    record.rest = true;
+                } else {
+                    pitchNode = xmlChild(child, "pitch");
+                    if (!pitchNode) {
+                        throw new Error("Unpitched notes are not supported yet (" + musicXmlNoteLocation(measureNumber, staff, voice) + ").");
+                    }
+                    step = xmlText(pitchNode, "step", "C").toUpperCase();
+                    alter = xmlNumber(pitchNode, "alter", 0);
+                    octave = parseInt(xmlText(pitchNode, "octave", "4"), 10);
+                    record.rest = false;
+                    record.pitch = { step: step, alter: alter, octave: octave, midi: pitchToMidi({ step: step, alter: alter, octave: octave }) };
+                }
+                lane.events.push(record);
+                if (!isChord) { previousStartByLane[laneKey] = cursor; }
+                lastNoteRecord = record;
+                if (!isChord) { cursor += duration; }
+            }
+            for (laneIndex = 0; laneIndex < lanes.length; laneIndex += 1) {
+                if (lanes[laneIndex].partId === part.id) {
+                    lanes[laneIndex].measureSignatures[m] = cloneTimeSignature(measureSignature);
+                    lanes[laneIndex].measureCount = part.measures.length;
+                    lanes[laneIndex].clefByMeasure[m] = state.clefByStaff[lanes[laneIndex].staff] || "G2";
+                    lanes[laneIndex].timeSignature = { numerator: measureSignature.numerator, denominator: measureSignature.denominator };
+                }
+            }
+        }
+    }
+    return { type: "musicxml", format: root.name, lanes: lanes, warnings: [] };
+}
+function durationSpecForImport(ticks) {
+    var i;
+    var spec;
+    for (i = 0; i < IMPORT_DURATION_TABLE.length; i += 1) {
+        spec = IMPORT_DURATION_TABLE[i];
+        if (spec.ticks === ticks) {
+            return { ticks: spec.ticks, noteValue: spec.noteValue, dots: spec.dots };
+        }
+    }
+    return null;
+}
+function importItemLocation(item) {
+    var measure = item && item.measureNumber !== undefined ? item.measureNumber : (item ? item.measure + 1 : "?");
+    var staff = item && item.sourceStaff !== undefined ? item.sourceStaff : "1";
+    var voice = item && item.sourceVoice !== undefined ? item.sourceVoice : "1";
+    return musicXmlNoteLocation(measure, staff, voice);
+}
+function importDurationSpec(item) {
+    var sourceType = item ? trimString(item.sourceType || "") : "";
+    var sourceDots = item && item.sourceDots !== undefined ? item.sourceDots : 0;
+    var noteValue;
+    var expected;
+    var actual;
+    var spec;
+    if (sourceType !== "") {
+        noteValue = musicXmlTypeToNoteValue(sourceType);
+        if (!noteValue) {
+            throw new Error("Unsupported MusicXML note type '" + sourceType + "' at " + importItemLocation(item) + ". 32nd notes and other smaller values are not supported yet.");
+        }
+        expected = durationTicksForValue(noteValue, sourceDots);
+        actual = item.duration;
+        if (expected === null || actual !== expected) {
+            throw new Error("MusicXML duration mismatch at " + importItemLocation(item) + ": <type>" + sourceType + "</type> with " + sourceDots + " dot(s) expects " + expected + " ticks, but <duration>" + item.sourceDuration + "</duration> converts to " + actual + " ticks.");
+        }
+        return { ticks: actual, noteValue: noteValue, dots: sourceDots };
+    }
+    spec = durationSpecForImport(item.duration);
+    if (!spec) {
+        throw new Error("Unsupported note/rest duration " + item.duration + " ticks at measure " + (item.measure + 1) + ". Supported values are whole, half, quarter, eighth, sixteenth, and their single-dotted half/quarter/eighth forms.");
+    }
+    if (sourceDots > 0 && spec.dots !== sourceDots) {
+        throw new Error("MusicXML duration mismatch at " + importItemLocation(item) + ": <dot/> count is " + sourceDots + " but " + item.duration + " ticks map to " + spec.noteValue + " with " + spec.dots + " dot(s).");
+    }
+    return spec;
+}
+function copyImportPitch(pitch) {
+    return {
+        step: pitch.step,
+        alter: pitch.alter,
+        octave: pitch.octave,
+        midi: pitch.midi,
+        notation: { accidental: null }
+    };
+}
+function copyImportPitches(pitches) {
+    var result = [];
+    var i;
+    for (i = 0; i < pitches.length; i += 1) {
+        result.push(copyImportPitch(pitches[i]));
+    }
+    return result;
+}
+function unsupportedPolyphonyError(measure, detail) {
+    return new Error("Unsupported polyphony in measure " + measure + ": " + detail + " Simple simultaneous chords are supported.");
+}
+function normalizeMusicXmlLaneEvents(events) {
+    var result = [];
+    var previousSource = null;
+    var lastEvent = null;
+    var item;
+    var normalized;
+    var pitch;
+    var location;
+    var sourceType;
+    var sourceDots;
+    var j;
+    for (j = 0; j < events.length; j += 1) {
+        item = events[j];
+        location = importItemLocation(item);
+        if (item.chordContinuation) {
+            if (!previousSource || item.chordBaseKey !== item.laneKey || item.chordBaseOrder !== previousSource.sourceOrder || item.sourceOrder !== previousSource.sourceOrder + 1 || item.chordBaseChildOrder !== previousSource.sourceChildOrder || item.sourceChildOrder !== previousSource.sourceChildOrder + 1) {
+                throw new Error("Unsupported MusicXML chord at " + location + ": the <chord/> member does not immediately follow a base note in the same Staff / Voice.");
+            }
+            if (!lastEvent || lastEvent.rest || lastEvent.measure !== item.measure || lastEvent.start !== item.start || lastEvent.duration !== item.duration) {
+                throw new Error("Unsupported MusicXML chord at " + location + ": the chord member has no matching base note with the same start and duration.");
+            }
+            sourceType = lastEvent.sourceType || "";
+            sourceDots = lastEvent.sourceDots || 0;
+            if (sourceType !== (item.sourceType || "") || sourceDots !== (item.sourceDots || 0)) {
+                throw new Error("Unsupported MusicXML chord at " + location + ": chord members use different duration types or dot counts.");
+            }
+            if (!item.pitch) {
+                throw new Error("Unsupported MusicXML chord at " + location + ": chord member has no pitched note.");
+            }
+            pitch = copyImportPitch(item.pitch);
+            if (!lastEvent.pitches) {
+                lastEvent.pitches = [copyImportPitch(lastEvent.pitch)];
+                lastEvent.pitch = null;
+                lastEvent.type = "chord";
+            }
+            lastEvent.pitches.push(pitch);
+        } else {
+            normalized = {
+                type: item.rest ? "rest" : "note",
+                measure: item.measure,
+                measureNumber: item.measureNumber,
+                start: item.start,
+                duration: item.duration,
+                sourceDuration: item.sourceDuration,
+                sourceDivisions: item.sourceDivisions,
+                sourceType: item.sourceType,
+                sourceDots: item.sourceDots || 0,
+                beam: item.beam,
+                laneKey: item.laneKey,
+                sourceStaff: item.sourceStaff,
+                sourceVoice: item.sourceVoice,
+                rest: !!item.rest
+            };
+            if (!normalized.rest) {
+                if (!item.pitch) {
+                    throw new Error("Unsupported MusicXML note at " + location + ": no pitched note data was found.");
+                }
+                normalized.pitch = copyImportPitch(item.pitch);
+            }
+            result.push(normalized);
+            lastEvent = normalized;
+        }
+        previousSource = item;
+    }
+    return result;
+}
+function midiDurationFragments(duration) {
+    var result = [];
+    var remaining = duration;
+    var i;
+    var spec;
+    while (remaining > 0) {
+        spec = null;
+        for (i = 0; i < IMPORT_DURATION_TABLE.length; i += 1) {
+            if (IMPORT_DURATION_TABLE[i].ticks <= remaining) {
+                spec = IMPORT_DURATION_TABLE[i];
+                break;
+            }
+        }
+        if (!spec) {
+            return null;
+        }
+        result.push({ ticks: spec.ticks, noteValue: spec.noteValue, dots: spec.dots });
+        remaining -= spec.ticks;
+    }
+    return result;
+}
+function appendMidiNoteSegments(result, measureMap, measureIndex, start, end, pitches, tieSerial) {
+    var fragments = [];
+    var cursor = start;
+    var currentMeasure = measureIndex;
+    var segmentEnd;
+    var localStart;
+    var segmentDuration;
+    var durationFragments;
+    var fragmentIndex;
+    var durationIndex;
+    var duration;
+    var fragment;
+    var tieGroupId;
+    while (cursor < end) {
+        if (!measureMap[currentMeasure]) {
+            throw new Error("An imported MIDI note extends beyond the calculated measure map.");
+        }
+        segmentEnd = Math.min(end, measureMap[currentMeasure].end);
+        segmentDuration = segmentEnd - cursor;
+        if (segmentDuration <= 0) {
+            currentMeasure += 1;
+            continue;
+        }
+        durationFragments = midiDurationFragments(segmentDuration);
+        if (!durationFragments) {
+            throw new Error("A MIDI note crossing a barline cannot be represented on the 1/16-note grid without changing its duration.");
+        }
+        localStart = cursor - measureMap[currentMeasure].start;
+        for (durationIndex = 0; durationIndex < durationFragments.length; durationIndex += 1) {
+            duration = durationFragments[durationIndex];
+            fragment = {
+                type: pitches.length > 1 ? "chord" : "note",
+                measure: currentMeasure,
+                start: localStart,
+                duration: duration.ticks,
+                rest: false,
+                pitch: pitches.length === 1 ? copyImportPitch(pitches[0]) : null,
+                pitches: pitches.length > 1 ? copyImportPitches(pitches) : null,
+                beam: null
+            };
+            fragments.push(fragment);
+            localStart += duration.ticks;
+        }
+        cursor = segmentEnd;
+        currentMeasure += 1;
+    }
+    if (fragments.length > 1) {
+        tieGroupId = "midi-tie-" + tieSerial;
+        for (fragmentIndex = 0; fragmentIndex < fragments.length; fragmentIndex += 1) {
+            fragments[fragmentIndex].tieGroupId = tieGroupId;
+            fragments[fragmentIndex].tieIndex = fragmentIndex;
+            fragments[fragmentIndex].tieStart = fragmentIndex < fragments.length - 1;
+            fragments[fragmentIndex].tieStop = fragmentIndex > 0;
+        }
+    }
+    for (fragmentIndex = 0; fragmentIndex < fragments.length; fragmentIndex += 1) {
+        result.push(fragments[fragmentIndex]);
+    }
+}
+function normalizeMidiLaneEvents(notes, measureMap) {
+    var result = [];
+    var i = 0;
+    var j;
+    var start;
+    var end;
+    var measureIndex;
+    var pitches;
+    var tieSerial = 0;
+    while (i < notes.length) {
+        start = notes[i].start;
+        end = notes[i].end;
+        measureIndex = midiMeasureIndexForTick(measureMap, start);
+        if (measureIndex < 0) { throw new Error("An imported MIDI event falls outside the calculated measure map at tick " + start + "."); }
+        j = i + 1;
+        while (j < notes.length && notes[j].start === start) {
+            if (notes[j].end !== end) {
+                throw unsupportedPolyphonyError(measureIndex + 1, "simultaneous notes have different durations or end times.");
+            }
+            j += 1;
+        }
+        pitches = [];
+        while (i < j) {
+            pitches.push(copyImportPitch(notes[i].pitch));
+            i += 1;
+        }
+        appendMidiNoteSegments(result, measureMap, measureIndex, start, end, pitches, tieSerial);
+        tieSerial += 1;
+    }
+    return result;
+}
+function appendImportRestEvents(target, startTick, durationTicks) {
+    var remaining = durationTicks;
+    var cursor = startTick;
+    var values = [1920, 960, 480, 240, 120];
+    var i;
+    var value;
+    var spec;
+    for (i = 0; i < values.length; i += 1) {
+        value = values[i];
+        while (remaining >= value) {
+            spec = durationSpecForImport(value);
+            target.push({ type: "rest", startTicks: cursor, durationTicks: value, noteValue: spec.noteValue, dots: 0, notation: { accidental: null, beamRole: null, beamGroupId: null } });
+            cursor += value;
+            remaining -= value;
+        }
+    }
+    if (remaining !== 0) { throw new Error("A rest could not be represented on the 1/16-note grid."); }
+}
+function applyImportedAccidentalsAndBeams(score, preserveXmlBeams, beamEnabled) {
+    var m;
+    var measure;
+    var accidentalState;
+    var i;
+    var event;
+    var stateKey;
+    var currentAlter;
+    var nextGroupId;
+    var activeGroup = null;
+    var beam;
+    var pitches;
+    var pitchIndex;
+    var pitch;
+    var accidental;
+    for (m = 0; m < score.measures.length; m += 1) {
+        measure = score.measures[m];
+        accidentalState = {};
+        nextGroupId = 0;
+        activeGroup = null;
+        for (i = 0; i < measure.events.length; i += 1) {
+            event = measure.events[i];
+            if (isPitchedEvent(event)) {
+                pitches = eventPitchList(event);
+                for (pitchIndex = 0; pitchIndex < pitches.length; pitchIndex += 1) {
+                    pitch = pitches[pitchIndex];
+                    if (!pitch.notation) { pitch.notation = { accidental: null }; }
+                    stateKey = accidentalStateKey(pitch);
+                    currentAlter = own(accidentalState, stateKey) ? accidentalState[stateKey] : 0;
+                    accidental = pitch.alter === currentAlter ? null : (pitch.alter === 1 ? "sharp" : (pitch.alter === -1 ? "flat" : "natural"));
+                    pitch.notation.accidental = accidental;
+                    if (event.type === "note") { event.notation.accidental = accidental; }
+                    accidentalState[stateKey] = pitch.alter;
+                }
+            }
+        }
+        if (!preserveXmlBeams) { assignBeamGroups(measure, beamEnabled); continue; }
+        for (i = 0; i < measure.events.length; i += 1) {
+            event = measure.events[i];
+            beam = event.importBeam;
+            if (!isPitchedEvent(event) || (eventBaseNoteValue(event) !== "eighth" && eventBaseNoteValue(event) !== "sixteenth") || !beam) { activeGroup = null; continue; }
+            if (beam === "begin") { nextGroupId += 1; activeGroup = nextGroupId; }
+            if (activeGroup !== null) {
+                event.beamGroupId = activeGroup;
+                event.notation.beamGroupId = activeGroup;
+            }
+            if (beam === "end") { activeGroup = null; }
+        }
+        for (i = 0; i < measure.events.length; i += 1) {
+            event = measure.events[i];
+            if (event.beamGroupId) {
+                var groupEvents = [];
+                var j;
+                for (j = 0; j < measure.events.length; j += 1) { if (measure.events[j].beamGroupId === event.beamGroupId) { groupEvents.push(measure.events[j]); } }
+                for (j = 0; j < groupEvents.length; j += 1) {
+                    groupEvents[j].beamRole = j === 0 ? "begin" : (j === groupEvents.length - 1 ? "end" : "continue");
+                    groupEvents[j].beamLevel = eventBaseNoteValue(groupEvents[j]) === "sixteenth" ? 2 : 1;
+                    groupEvents[j].notation.beamRole = groupEvents[j].beamRole;
+                    groupEvents[j].notation.beamLevel = groupEvents[j].beamLevel;
+                }
+            }
+        }
+    }
+}
+function importEventsToScore(events, measureCount, sourceType, settings, measureSignatures) {
+    var firstTimeSignature = measureSignatures && measureSignatures.length ? cloneTimeSignature(measureSignatures[0]) : cloneTimeSignature(DEFAULT_TIME_SIGNATURE);
+    var score = { version: SCORE_VERSION, timeSignature: firstTimeSignature, clef: "treble", key: { tonic: "C", mode: "major" }, ticksPerQuarter: TICKS_PER_QUARTER, measures: [], importSource: sourceType, seeds: { masterSeed: "import", pitchSeed: "import", rhythmSeed: "import", symbolSeed: "import" } };
+    var m;
+    var measureEvents;
+    var cursor;
+    var i;
+    var item;
+    var localStart;
+    var durationSpec;
+    var event;
+    var previousEnd;
+    var pitches;
+    var pitchIndex;
+    var pitch;
+    var copiedPitch;
+    var eventType;
+    var timeSignature;
+    var measureTicks;
+    if (measureCount < 1) { measureCount = 1; }
+    if (measureCount > IMPORT_MAX_MEASURES) { throw new Error("Import contains " + measureCount + " measures. The current importer supports up to " + IMPORT_MAX_MEASURES + " measures per generated staff."); }
+    for (m = 0; m < measureCount; m += 1) {
+        measureEvents = [];
+        for (i = 0; i < events.length; i += 1) { if (events[i].measure === m) { measureEvents.push(events[i]); } }
+        measureEvents.sort(function (a, b) { return a.start - b.start || (a.rest ? 1 : -1); });
+        timeSignature = cloneTimeSignature(measureSignatures && measureSignatures[m] ? measureSignatures[m] : (m === 0 ? firstTimeSignature : score.timeSignature));
+        measureTicks = timeSignatureTicks(timeSignature);
+        cursor = 0;
+        previousEnd = 0;
+        score.measures.push({ number: m + 1, events: [], tickTotal: measureTicks, timeSignature: timeSignature });
+        for (i = 0; i < measureEvents.length; i += 1) {
+            item = measureEvents[i];
+            localStart = item.start;
+            if (localStart < previousEnd) {
+                throw unsupportedPolyphonyError(m + 1, "notes overlap with different start/end times" + (sourceType === "musicxml" ? " at " + importItemLocation(item) + "." : "."));
+            }
+            if (localStart < 0 || localStart >= measureTicks) {
+                if (sourceType === "musicxml") {
+                    throw new Error("MusicXML measure " + (item.measureNumber || (m + 1)) + " contains content outside its declared " + timeSignatureLabel(timeSignature) + " span at " + importItemLocation(item) + " (event starts at " + localStart + " ticks). The source must be corrected; no notes were discarded.");
+                }
+                throw new Error("An imported event falls outside measure " + (m + 1) + ".");
+            }
+            if (localStart > cursor) { appendImportRestEvents(score.measures[m].events, cursor, localStart - cursor); }
+            durationSpec = importDurationSpec(item);
+            if (localStart + durationSpec.ticks > measureTicks) {
+                if (sourceType === "musicxml") {
+                    throw new Error("MusicXML measure " + (item.measureNumber || (m + 1)) + " contains a note crossing its declared " + timeSignatureLabel(timeSignature) + " barline at " + importItemLocation(item) + ". The source must be corrected; ties across barlines are not supported yet.");
+                }
+                throw new Error("A note crosses a barline in measure " + (m + 1) + ". Ties across barlines are not supported yet.");
+            }
+            pitches = item.pitches && item.pitches.length ? item.pitches : (item.pitch ? [item.pitch] : []);
+            eventType = item.rest ? "rest" : (pitches.length > 1 ? "chord" : "note");
+            if (!item.rest && pitches.length === 0) { throw new Error("Imported note has no pitch at measure " + (m + 1) + "."); }
+            if (eventType === "chord" && pitches.length < 2) { throw new Error("Chord at measure " + (m + 1) + " must contain at least two pitches."); }
+            event = { type: eventType, startTicks: localStart, durationTicks: durationSpec.ticks, noteValue: durationSpec.noteValue, dots: durationSpec.dots, notation: { accidental: null, beamRole: null, beamGroupId: null }, importBeam: item.beam || null };
+            if (item.tieGroupId !== undefined && item.tieGroupId !== null) {
+                event.tieGroupId = item.tieGroupId;
+                event.tieIndex = item.tieIndex;
+                event.tieStart = item.tieStart === true;
+                event.tieStop = item.tieStop === true;
+            }
+            if (!item.rest) {
+                if (eventType === "chord") { event.pitches = []; }
+                for (pitchIndex = 0; pitchIndex < pitches.length; pitchIndex += 1) {
+                    pitch = pitches[pitchIndex];
+                    if (!pitch || !own(STEP_INDEX, pitch.step) || !isFiniteNumber(pitch.alter) || pitch.alter < -1 || pitch.alter > 1 || !isFiniteNumber(pitch.octave)) { throw new Error("Unsupported imported pitch spelling at measure " + (m + 1) + ". Double sharps/flats are not supported yet."); }
+                    copiedPitch = copyImportPitch(pitch);
+                    if (eventType === "chord") { event.pitches.push(copiedPitch); }
+                    else { event.pitch = copiedPitch; }
+                }
+            }
+            score.measures[m].events.push(event);
+            cursor = localStart + durationSpec.ticks;
+            previousEnd = cursor;
+        }
+        if (cursor < measureTicks) { appendImportRestEvents(score.measures[m].events, cursor, measureTicks - cursor); }
+    }
+    applyImportedAccidentalsAndBeams(score, sourceType === "musicxml", settings ? settings.beam : true);
+    return score;
+}
+function midiLaneToScore(document, lane, settings) {
+    var notes = quantizeMidiLane(document, lane);
+    var i;
+    var maxEnd = 0;
+    var measureMap;
+    var events;
+    var measureSignatures = [];
+    for (i = 0; i < notes.length; i += 1) {
+        maxEnd = Math.max(maxEnd, notes[i].end);
+    }
+    measureMap = buildMidiMeasureMap(document, maxEnd);
+    events = normalizeMidiLaneEvents(notes, measureMap);
+    for (i = 0; i < measureMap.length; i += 1) { measureSignatures.push(measureMap[i].timeSignature); }
+    return importEventsToScore(events, measureMap.length, "midi", settings, measureSignatures);
+}
+function musicXmlLaneToScore(document, lane, settings) {
+    var maxMeasure = 0;
+    var events;
+    var i;
+    var measureCount = Math.max(1, lane.measureCount || 0);
+    var measureSignatures = [];
+    var sourceSignature;
+    var clef;
+    events = normalizeMusicXmlLaneEvents(lane.events);
+    for (i = 0; i < events.length; i += 1) { maxMeasure = Math.max(maxMeasure, events[i].measure); }
+    measureCount = Math.max(measureCount, maxMeasure + 1);
+    for (i = 0; i < measureCount; i += 1) {
+        sourceSignature = lane.measureSignatures && lane.measureSignatures[i] ? lane.measureSignatures[i] : (i > 0 ? measureSignatures[i - 1] : (lane.timeSignature || DEFAULT_TIME_SIGNATURE));
+        sourceSignature = normalizeTimeSignature(sourceSignature.numerator, sourceSignature.denominator, sourceSignature.beatGroups);
+        if (!sourceSignature) {
+            throw new Error("Unsupported MusicXML time signature at measure " + (i + 1) + ". Supported denominators are 2, 4, 8, and 16; numerator must be 1-32.");
+        }
+        measureSignatures.push(sourceSignature);
+        clef = lane.clefByMeasure && lane.clefByMeasure[i] ? lane.clefByMeasure[i] : lane.clef;
+        if (clef && clef !== "G2") {
+            throw new Error("The selected MusicXML source uses clef " + clef + " at measure " + (i + 1) + ". The current renderer supports treble clef (G on line 2) only.");
+        }
+    }
+    return importEventsToScore(events, measureCount, "musicxml", settings, measureSignatures);
+}
+function chooseDefaultImportLane(document) {
+    var best = -1;
+    var bestCount = -1;
+    var i;
+    var count;
+    for (i = 0; i < document.lanes.length; i += 1) {
+        if (document.lanes[i].isPercussion) { continue; }
+        count = document.lanes[i].sourceType === "midi" ? document.lanes[i].rawNotes.length : document.lanes[i].events.length;
+        if (count > bestCount) { best = i; bestCount = count; }
+    }
+    if (best < 0 && document.lanes.length > 0) { best = 0; }
+    return best;
+}
+function parseImportFile(file) {
+    var extension = importExtension(file.fsName || file.name || "");
+    if (!IMPORT_EXTENSIONS[extension]) { throw new Error("Unsupported file type: ." + extension + ". Select .mid, .midi, .musicxml, or .xml."); }
+    if (extension === "mxl") { throw new Error("Compressed .mxl MusicXML is not supported yet. Export an uncompressed .musicxml or .xml file from MuseScore."); }
+    if (extension === "mid" || extension === "midi") { return parseMidiBytes(readImportBinary(file)); }
+    return parseMusicXmlText(readImportText(file));
+}
+function importDocumentFromPath(pathText) {
+    var normalized = normalizeImportPath(pathText);
+    var file;
+    if (!normalized) { throw new Error("Choose a MIDI or MusicXML file, or enter its path manually."); }
+    file = new File(normalized);
+    if (!file.exists) { throw new Error("File not found: " + normalized); }
+    return { file: file, document: parseImportFile(file) };
+}
+function importedScorePitchBounds(score) {
+    var low = 127;
+    var high = 0;
+    var found = false;
+    var m;
+    var i;
+    var event;
+    for (m = 0; m < score.measures.length; m += 1) {
+        for (i = 0; i < score.measures[m].events.length; i += 1) {
+            event = score.measures[m].events[i];
+            if (isPitchedEvent(event)) {
+                var pitches = eventPitchList(event);
+                var pitchIndex;
+                for (pitchIndex = 0; pitchIndex < pitches.length; pitchIndex += 1) {
+                    low = Math.min(low, pitches[pitchIndex].midi);
+                    high = Math.max(high, pitches[pitchIndex].midi);
+                    found = true;
+                }
+            }
+        }
+    }
+    return found ? { low: low, high: high } : { low: 60, high: 72 };
+}
+function fitImportedScoreSettings(score, settings) {
+    var fitted = copySettings(settings);
+    var minimumLength;
+    var previous;
+    var bounds = importedScorePitchBounds(score);
+    fitted.measures = score.measures.length;
+    fitted.pitchLowMidi = bounds.low;
+    fitted.pitchHighMidi = bounds.high;
+    fitted.accidentals = true;
+    minimumLength = calculateMinimumLength(score, fitted);
+    while (minimumLength > MAX_LENGTH && fitted.staffSize > MIN_STAFF_SIZE) {
+        previous = fitted.staffSize;
+        fitted.staffSize = Math.max(MIN_STAFF_SIZE, roundToTenth(fitted.staffSize * 0.9));
+        if (fitted.staffSize === previous) { break; }
+        minimumLength = calculateMinimumLength(score, fitted);
+    }
+    while (minimumLength > MAX_LENGTH && fitted.noteScale > MIN_SCALE) {
+        previous = fitted.noteScale;
+        fitted.noteScale = Math.max(MIN_SCALE, roundToTenth(fitted.noteScale * 0.9));
+        if (fitted.noteScale === previous) { break; }
+        minimumLength = calculateMinimumLength(score, fitted);
+    }
+    while (minimumLength > MAX_LENGTH && fitted.symbolScale > MIN_SCALE) {
+        previous = fitted.symbolScale;
+        fitted.symbolScale = Math.max(MIN_SCALE, roundToTenth(fitted.symbolScale * 0.9));
+        if (fitted.symbolScale === previous) { break; }
+        minimumLength = calculateMinimumLength(score, fitted);
+    }
+    if (minimumLength > MAX_LENGTH) { throw new Error("The imported score is too wide for the current single-system renderer. Reduce the source length or wait for multi-system layout support."); }
+    fitted.length = clamp(Math.max(fitted.length, Math.ceil(minimumLength)), MIN_LENGTH, MAX_LENGTH);
+    return fitted;
+}
+function buildScoreFromImportDocument(document, laneIndex, settings) {
+    var lane;
+    if (!document || !document.lanes || document.lanes.length === 0) { throw new Error("No note source was found in the selected file."); }
+    if (laneIndex === undefined || laneIndex === null || laneIndex < 0 || laneIndex >= document.lanes.length) { laneIndex = chooseDefaultImportLane(document); }
+    lane = document.lanes[laneIndex];
+    if (!lane) { throw new Error("No import source is selected."); }
+    return document.type === "midi" ? midiLaneToScore(document, lane, settings) : musicXmlLaneToScore(document, lane, settings);
+}
+function generateImportedStaff(settings, pathText, laneIndex, cachedDocument) {
+    var comp = app.project ? app.project.activeItem : null;
+    var loaded;
+    var document;
+    var score;
+    var importSettings;
+    var scoreErrors;
+    var plan;
+    var planErrors;
+    var layer = null;
+    var undoStarted = false;
+    if (!comp || !(comp instanceof CompItem)) { throw new Error("Open and select a composition before importing a score."); }
+    if (cachedDocument) { document = cachedDocument; }
+    else { loaded = importDocumentFromPath(pathText); document = loaded.document; }
+    score = buildScoreFromImportDocument(document, laneIndex, settings);
+    importSettings = fitImportedScoreSettings(score, settings);
+    scoreErrors = validateScore(score, importSettings);
+    if (scoreErrors.length > 0) { throw new Error("Imported score validation failed:\n" + scoreErrors.join("\n")); }
+    plan = buildRenderPlan(score, importSettings);
+    planErrors = validateRenderPlan(plan);
+    if (planErrors.length > 0) { throw new Error("Imported Render Plan validation failed:\n" + planErrors.join("\n")); }
+    try {
+        app.beginUndoGroup("Import Staff");
+        undoStarted = true;
+        layer = renderPlanToShapeLayer(comp, plan, importSettings, score);
+        layer.name = "Staff Generator Import";
+        layer.selected = true;
+        app.endUndoGroup();
+        undoStarted = false;
+    } catch (error) {
+        if (layer) { try { layer.remove(); } catch (removeError) {} }
+        if (undoStarted) { app.endUndoGroup(); }
+        throw error;
+    }
+    return { layer: layer, score: score, plan: plan, settings: importSettings, document: document, laneIndex: laneIndex };
+}
+function buildImportTab(importTab) {
+    var importer = {};
+    var filePanel = addSection(importTab, "MIDI / MusicXML Import");
+    var fileRow = filePanel.add("group");
+    var sourceRow = filePanel.add("group");
+    var actionRow = filePanel.add("group");
+    fileRow.orientation = "row";
+    fileRow.alignChildren = ["fill", "center"];
+    fileRow.alignment = ["fill", "top"];
+    importer.path = fileRow.add("edittext", undefined, "");
+    importer.path.alignment = ["fill", "center"];
+    importer.path.helpTip = "Choose a MIDI/MusicXML file or type/paste the full path manually.";
+    importer.browse = fileRow.add("button", undefined, "Browse...");
+    sourceRow.orientation = "row";
+    sourceRow.alignChildren = ["left", "center"];
+    importer.sourceLabel = sourceRow.add("statictext", undefined, "Source");
+    importer.sourceLabel.helpTip = "MIDI sources are Track / Channel. MusicXML sources are Part / Staff / Voice.";
+    importer.source = sourceRow.add("dropdownlist");
+    importer.source.alignment = ["fill", "center"];
+    importer.source.enabled = false;
+    actionRow.orientation = "row";
+    actionRow.alignChildren = ["fill", "center"];
+    actionRow.alignment = ["fill", "top"];
+    importer.generate = actionRow.add("button", undefined, "Import & Generate");
+    importer.generate.alignment = ["fill", "center"];
+    importer.info = filePanel.add("statictext", undefined,
+        "Source notation is preserved. Imported measures, pitches, rhythms, and meter are not generated from Basic/Advanced settings.\n" +
+        "Length may increase; Staff Space, Note Scale, and Symbol Scale may adjust to fit the Shape Layer.\n" +
+        "Supports MIDI format 0/1 and uncompressed MusicXML: treble clef, numeric meters with denominator 2/4/8/16, meter changes between bars, one voice with simple chords, and whole to sixteenth including single-dotted values.",
+        { multiline: true });
+    importer.info.alignment = ["fill", "top"];
+    importer.status = filePanel.add("statictext", undefined, "Ready");
+    importer.status.alignment = ["fill", "top"];
+    allowResponsiveShrink(importer.status);
+    importer.document = null;
+    importer.loadedPath = "";
+    return importer;
+}
+function populateImportSources(importer, document) {
+    var i;
+    var defaultIndex = chooseDefaultImportLane(document);
+    if (importer.sourceLabel) {
+        importer.sourceLabel.text = document.type === "midi" ? "Track / Channel" : "Part / Staff / Voice";
+    }
+    importer.source.removeAll();
+    for (i = 0; i < document.lanes.length; i += 1) { importer.source.add("item", document.lanes[i].name); }
+    importer.source.enabled = document.lanes.length > 0;
+    if (document.lanes.length > 0) { importer.source.selection = defaultIndex >= 0 ? defaultIndex : 0; }
+}
+function importTimeSignatureSummary(document) {
+    var labels = [];
+    var seen = {};
+    var addLabel = function (numerator, denominator) {
+        var label;
+        if (!isFiniteNumber(numerator) || !isFiniteNumber(denominator)) { return; }
+        label = Math.floor(numerator) + "/" + Math.floor(denominator);
+        if (!seen[label]) {
+            seen[label] = true;
+            labels.push(label);
+        }
+    };
+    var i;
+    var lane;
+    var measureSignatures;
+    var signature;
+    if (!document) { return ""; }
+    if (document.type === "midi") {
+        for (i = 0; i < (document.timeSignatures || []).length; i += 1) {
+            addLabel(document.timeSignatures[i].numerator, document.timeSignatures[i].denominator);
+        }
+        if (labels.length === 0) { addLabel(DEFAULT_TIME_SIGNATURE.numerator, DEFAULT_TIME_SIGNATURE.denominator); }
+    } else {
+        lane = document.lanes && document.lanes.length > 0 ? document.lanes[chooseDefaultImportLane(document)] : null;
+        measureSignatures = lane && lane.measureSignatures ? lane.measureSignatures : [];
+        for (i = 0; i < measureSignatures.length; i += 1) {
+            signature = measureSignatures[i];
+            if (signature) { addLabel(signature.numerator, signature.denominator); }
+        }
+    }
+    if (labels.length === 0) { return ""; }
+    if (labels.length > 4) { labels = labels.slice(0, 4); labels.push("..."); }
+    return " Meter: " + labels.join(", ");
+}
+function setImportStatus(importer, text) {
+    if (importer && importer.status) { importer.status.text = text; }
+}
+function importLayoutAdjustmentSummary(original, fitted) {
+    var keys = ["length", "staffSize", "noteScale", "symbolScale"];
+    var labels = { length: "Length", staffSize: "Staff Space", noteScale: "Note Scale", symbolScale: "Symbol Scale" };
+    var changes = [];
+    var i;
+    var key;
+    if (!original || !fitted) { return ""; }
+    for (i = 0; i < keys.length; i += 1) {
+        key = keys[i];
+        if (original[key] !== fitted[key]) {
+            changes.push(labels[key] + " " + formatSettingValue(original[key]) + " -> " + formatSettingValue(fitted[key]));
+        }
+    }
+    return changes.length > 0 ? " / Layout adjusted: " + changes.join(", ") : "";
+}
+function refreshImportDocument(importer, quiet) {
+    var loaded;
+    try {
+        loaded = importDocumentFromPath(importer.path.text);
+        importer.document = loaded.document;
+        importer.loadedPath = loaded.file.fsName;
+        importer.path.text = loaded.file.fsName;
+        populateImportSources(importer, loaded.document);
+        setImportStatus(importer, "Loaded " + loaded.document.type.toUpperCase() + ": " + loaded.document.lanes.length + " source(s)." + importTimeSignatureSummary(loaded.document));
+        return true;
+    } catch (error) {
+        importer.document = null;
+        importer.loadedPath = "";
+        try {
+            if (importer.sourceLabel) { importer.sourceLabel.text = "Source"; }
+            importer.source.removeAll();
+            importer.source.enabled = false;
+        } catch (ignore) {}
+        setImportStatus(importer, "Import file not loaded");
+        if (!quiet) { alert("Could not load import file.\n\n" + error.toString(), "Staff Generator"); }
+        return false;
+    }
+}
+function bindImportUI(importer, ui, window) {
+    importer.browse.onClick = function () {
+        var file;
+        try {
+            file = browseImportFile();
+            if (!file) { return; }
+            importer.path.text = file.fsName;
+            refreshImportDocument(importer, false);
+        } finally { clearButtonFocus(importer.browse); }
+    };
+    importer.path.onChange = function () { refreshImportDocument(importer, true); };
+    importer.generate.onClick = function () {
+        var settings;
+        var laneIndex;
+        var result;
+        var normalizedPath = normalizeImportPath(importer.path.text);
+        try {
+            settings = collectSettings(ui);
+            if (!settings) { return; }
+            if (!importer.document || normalizeImportPath(importer.loadedPath) !== normalizedPath) {
+                if (!refreshImportDocument(importer, false)) { return; }
+                normalizedPath = normalizeImportPath(importer.path.text);
+            }
+            laneIndex = importer.source.selection ? importer.source.selection.index : chooseDefaultImportLane(importer.document);
+            setImportStatus(importer, "Importing score...");
+            if (window.update) { window.update(); }
+            result = generateImportedStaff(settings, normalizedPath, laneIndex, importer.document);
+            setImportStatus(importer, "Imported: " + result.score.measures.length + " measures / 1 Shape Layer" +
+                importLayoutAdjustmentSummary(settings, result.settings));
+        } catch (error) {
+            setImportStatus(importer, "Import failed");
+            alert("Import failed.\n\n" + error.toString(), "Staff Generator");
+        } finally { clearButtonFocus(importer.generate); }
+    };
+}
     function buildUI(thisObj) {
         var window = thisObj instanceof Panel ? thisObj : new Window("palette", "Staff Generator", undefined, { resizeable: true });
         var ui = {};
@@ -2657,6 +4735,7 @@ See THIRD_PARTY_NOTICES.md and the OFL notice next to the embedded glyph data.
         var resizeState = { inLayout: false, inResizeHandler: false, initialized: false, lastLayoutKey: "", disposed: false };
         var tabs;
         var basicTab;
+        var importTab;
         var advancedTab;
         var staffPanel;
         var scorePanel;
@@ -2684,10 +4763,6 @@ See THIRD_PARTY_NOTICES.md and the OFL notice next to the embedded glyph data.
         allowResponsiveShrink(window);
         try { window.minimumSize = [300, 220]; } catch (error) {}
         if (!(thisObj instanceof Panel)) { setResponsivePreferredWidth(window, 460); }
-        presetId = getSavedSetting("presetId", "default");
-        preset = addPresetField(window, presetId, responsiveRows);
-        ui.preset = preset;
-        ui.activePresetId = getPresetChoiceId(preset.control, preset.choices);
         tabs = window.add("tabbedpanel");
         tabs.alignChildren = ["fill", "fill"];
         tabs.alignment = ["fill", "top"];
@@ -2701,45 +4776,55 @@ See THIRD_PARTY_NOTICES.md and the OFL notice next to the embedded glyph data.
         advancedTab.orientation = "column";
         advancedTab.alignChildren = ["fill", "top"];
         allowResponsiveShrink(advancedTab);
+        importTab = tabs.add("tab", undefined, "Import");
+        importTab.orientation = "column";
+        importTab.alignChildren = ["fill", "top"];
+        allowResponsiveShrink(importTab);
         tabs.selection = basicTab;
-        staffPanel = addSection(basicTab, "Staff");
-        ui.length = addField(staffPanel, "Length", getSavedSetting("length", DEFAULTS.length), 8, "Total horizontal length of the staff.", responsiveRows);
-        ui.staffSize = addField(staffPanel, "Staff Size", getSavedSetting("staffSize", DEFAULTS.staffSize), 8, "Spacing between staff lines and the base symbol size.", responsiveRows);
-        ui.measures = addField(staffPanel, "Measures", getSavedSetting("measures", DEFAULTS.measures), 8, "Number of measures to generate (1-64).", responsiveRows);
+        presetId = getSavedSetting("presetId", "default");
+        preset = addPresetField(basicTab, presetId, responsiveRows);
+        ui.preset = preset;
+        ui.activePresetId = getPresetChoiceId(preset.control, preset.choices);
+        staffPanel = addSection(basicTab, "Layout");
+        ui.length = addField(staffPanel, "Length (px)", getSavedSetting("length", DEFAULTS.length), 8, "Total horizontal length of the staff. Import may increase this value automatically to preserve the source.", responsiveRows);
+        ui.staffSize = addField(staffPanel, "Staff Space (px)", getSavedSetting("staffSize", DEFAULTS.staffSize), 8, "Distance between staff lines and the base symbol size. Used by generated and imported scores.", responsiveRows);
+        ui.measures = addField(staffPanel, "Measures", getSavedSetting("measures", DEFAULTS.measures), 8, "Number of measures to generate (1-64). Import uses the source measure count instead.", responsiveRows);
         scorePanel = addSection(basicTab, "Score");
-        ui.pitchRange = addPitchRangeFields(scorePanel, "Pitch Range", getSavedSetting("pitchLow", DEFAULTS.pitchLow), getSavedSetting("pitchHigh", DEFAULTS.pitchHigh), "Choose the lower note on the left and the higher note on the right.", responsiveRows);
-        ui.rhythmDensity = addField(scorePanel, "Rhythm Density %", getSavedRhythmDensity(), 8, "Higher values use denser, shorter rhythm patterns when the current layout has enough room.", responsiveRows);
-        ui.restDensity = addField(scorePanel, "Rest Amount %", getSavedSetting("restDensity", DEFAULTS.restDensity), 8, "Percentage of generated events that become rests.", responsiveRows);
-        ui.accidentals = scorePanel.add("checkbox", undefined, "Allow sharp / flat accidentals");
-        ui.accidentals.helpTip = "Allow generated pitches to use sharps and flats.";
+        ui.pitchRange = addPitchRangeFields(scorePanel, "Pitch Range", getSavedSetting("pitchLow", DEFAULTS.pitchLow), getSavedSetting("pitchHigh", DEFAULTS.pitchHigh), "Choose the lower note on the left and the higher note on the right for generated scores. Import uses the source pitch range.", responsiveRows);
+        ui.rhythmDensity = addField(scorePanel, "Rhythm Density %", getSavedRhythmDensity(), 8, "Higher values use denser, shorter rhythm patterns when the current layout has enough room. Generated scores only; ignored by Import.", responsiveRows);
+        ui.restDensity = addField(scorePanel, "Rest Amount %", getSavedSetting("restDensity", DEFAULTS.restDensity), 8, "Percentage of generated events that become rests. Generated scores only; ignored by Import.", responsiveRows);
+        ui.accidentals = scorePanel.add("checkbox", undefined, "Allow generated accidentals");
+        ui.accidentals.helpTip = "Allow generated pitches to use sharps and flats. Import preserves the source spelling.";
         ui.accidentals.value = String(getSavedSetting("accidentals", DEFAULTS.accidentals)) === "true";
         generationPanel = addSection(basicTab, "Style");
-        ui.globalThickness = addField(generationPanel, "Line Weight %", getSavedSetting("globalThickness", DEFAULTS.globalThickness), 8, "Scale the thickness of staff lines, stems, beams, barlines, and ledger lines together.", responsiveRows);
+        ui.globalThickness = addField(generationPanel, "Global Line Weight %", getSavedSetting("globalThickness", DEFAULTS.globalThickness), 8, "Scale the thickness of staff lines, stems, beams, barlines, and ledger lines together. Used by generated and imported scores.", responsiveRows);
         basicActions = addActionControls(basicTab);
         advancedGenerationPanel = addSection(advancedTab, "Generation");
-        ui.masterSeed = addField(advancedGenerationPanel, "Master Seed", getSavedSetting("masterSeed", DEFAULTS.masterSeed), 10, "Use the same seed and settings to reproduce the same score.", responsiveRows);
-        ui.melodyMotion = addField(advancedGenerationPanel, "Melody Motion %", getSavedMelodyMotion(), 8, "0 favors smooth stepwise motion; 100 allows wider leaps.", responsiveRows);
-        ui.repetitionTendency = addField(advancedGenerationPanel, "Repetition %", getSavedSetting("repetitionTendency", DEFAULTS.repetitionTendency), 8, "Higher values favor repeating the same pitch.", responsiveRows);
-        ui.beam = advancedGenerationPanel.add("checkbox", undefined, "Beam eighth / sixteenth notes");
-        ui.beam.helpTip = "Connect consecutive eighth and sixteenth notes within the same beat.";
+        ui.masterSeed = addField(advancedGenerationPanel, "Master Seed", getSavedSetting("masterSeed", DEFAULTS.masterSeed), 10, "Use the same seed and settings to reproduce the same generated score. Import uses the source timing and pitches.", responsiveRows);
+        ui.melodyMotion = addField(advancedGenerationPanel, "Melody Motion %", getSavedMelodyMotion(), 8, "0 favors smooth stepwise motion; 100 allows wider leaps. Generated scores only; ignored by Import.", responsiveRows);
+        ui.repetitionTendency = addField(advancedGenerationPanel, "Repetition %", getSavedSetting("repetitionTendency", DEFAULTS.repetitionTendency), 8, "Higher values favor repeating the same pitch. Generated scores only; ignored by Import.", responsiveRows);
+        ui.beam = advancedGenerationPanel.add("checkbox", undefined, "Auto-beam generated / MIDI");
+        ui.beam.helpTip = "Connect consecutive eighth and sixteenth notes in generated scores and MIDI imports. MusicXML beam metadata is preserved.";
         ui.beam.value = String(getSavedSetting("beam", DEFAULTS.beam)) === "true";
-        transformPanel = addSection(advancedTab, "Transform / Scale");
-        ui.positionX = addField(transformPanel, "Position X", getSavedSetting("positionX", DEFAULTS.positionX), 8, "Horizontal position of the generated Shape Layer.", responsiveRows);
-        ui.positionY = addField(transformPanel, "Position Y", getSavedSetting("positionY", DEFAULTS.positionY), 8, "Vertical position of the generated Shape Layer.", responsiveRows);
+        transformPanel = addSection(advancedTab, "Layout / Scale");
+        ui.positionX = addField(transformPanel, "Position X (px)", getSavedSetting("positionX", DEFAULTS.positionX), 8, "Horizontal position of the generated Shape Layer.", responsiveRows);
+        ui.positionY = addField(transformPanel, "Position Y (px)", getSavedSetting("positionY", DEFAULTS.positionY), 8, "Vertical position of the generated Shape Layer.", responsiveRows);
         ui.overallScale = addField(transformPanel, "Overall Scale %", getSavedSetting("overallScale", DEFAULTS.overallScale), 8, "Overall scale of the generated Shape Layer.", responsiveRows);
         ui.noteScale = addField(transformPanel, "Note Scale %", getSavedSetting("noteScale", DEFAULTS.noteScale), 8, "Scale of noteheads and related stem and ledger placement.", responsiveRows);
         ui.symbolScale = addField(transformPanel, "Symbol Scale %", getSavedSetting("symbolScale", DEFAULTS.symbolScale), 8, "Scale of the clef, rests, accidentals, and time signature.", responsiveRows);
-        fineStylePanel = addSection(advancedTab, "Fine Line Weights");
+        fineStylePanel = addSection(advancedTab, "Line Thickness");
         ui.staffLineThickness = addField(fineStylePanel, "Staff Line", getSavedSetting("staffLineThickness", DEFAULTS.staffLineThickness), 8, "Base thickness of the five staff lines before Line Weight is applied.", responsiveRows);
         ui.stemThickness = addField(fineStylePanel, "Stem", getSavedSetting("stemThickness", DEFAULTS.stemThickness), 8, "Base note stem thickness.", responsiveRows);
         ui.beamThickness = addField(fineStylePanel, "Beam", getSavedSetting("beamThickness", DEFAULTS.beamThickness), 8, "Base beam thickness.", responsiveRows);
         ui.barlineThickness = addField(fineStylePanel, "Barline", getSavedSetting("barlineThickness", DEFAULTS.barlineThickness), 8, "Base measure barline thickness.", responsiveRows);
         ui.ledgerLineThickness = addField(fineStylePanel, "Ledger Line", getSavedSetting("ledgerLineThickness", DEFAULTS.ledgerLineThickness), 8, "Base ledger line thickness.", responsiveRows);
         advancedActions = addActionControls(advancedTab);
+        ui.importer = buildImportTab(importTab);
         actionControls = [basicActions, advancedActions];
         actionGroups = [basicActions.group, advancedActions.group];
         ui.generate = basicActions.generate;
         ui.randomize = basicActions.randomize;
+        bindImportUI(ui.importer, ui, window);
         bindPresetTracking(ui);
         preset.control.onChange = function () {
             var selectedId = getPresetChoiceId(preset.control, preset.choices);
