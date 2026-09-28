@@ -1,0 +1,223 @@
+<div class="flux-native-panel sg-panel">
+  <div class="flux-native-content sg-content">
+    <nav class="flux-native-segment-row sg-tabs" role="tablist" aria-label="Staff Generator sections">
+      <button class="flux-button flux-native-segment-button active" type="button" role="tab" aria-selected="true" aria-controls="sg-tab-basic" data-tab="basic">Basic</button>
+      <button class="flux-button flux-native-segment-button" type="button" role="tab" aria-selected="false" aria-controls="sg-tab-advanced" data-tab="advanced">Advanced</button>
+      <button class="flux-button flux-native-segment-button" type="button" role="tab" aria-selected="false" aria-controls="sg-tab-import" data-tab="import">Import</button>
+    </nav>
+    <hr class="flux-native-settings-divider">
+
+    <section id="sg-tab-basic" class="sg-tab-panel" role="tabpanel">
+      <div class="flux-native-settings-group sg-settings-group">
+        <div class="flux-native-settings-row sg-settings-row">
+          <span class="flux-native-settings-label">Preset</span>
+          <div id="sg-preset-slot" class="flux-native-control-slot"></div>
+        </div>
+      </div>
+      <hr class="flux-native-settings-divider">
+
+      <section class="sg-section">
+        <div class="flux-native-settings-label sg-section-heading" role="heading" aria-level="2">Layout</div>
+        <div class="flux-native-settings-group sg-settings-group">
+          <div class="flux-native-settings-row sg-settings-row" title="Total horizontal length of the staff. Import may increase this value automatically to preserve the source.">
+            <label class="flux-native-settings-label" for="sg-length">Length (px)</label>
+            <div class="flux-native-control-slot"><input id="sg-length" class="flux-input flux-number-input flux-native-compact-input" type="number" step="any"></div>
+          </div>
+          <hr class="flux-native-settings-divider">
+          <div class="flux-native-settings-row sg-settings-row" title="Distance between staff lines and the base symbol size. Used by generated and imported scores.">
+            <label class="flux-native-settings-label" for="sg-staffSize">Staff Space (px)</label>
+            <div class="flux-native-control-slot"><input id="sg-staffSize" class="flux-input flux-number-input flux-native-compact-input" type="number" step="any"></div>
+          </div>
+          <hr class="flux-native-settings-divider">
+          <div class="flux-native-settings-row sg-settings-row" title="Number of measures to generate (1-64). Import uses the source measure count instead.">
+            <label class="flux-native-settings-label" for="sg-measures">Measures</label>
+            <div class="flux-native-control-slot"><input id="sg-measures" class="flux-input flux-number-input flux-native-compact-input" type="number" step="1"></div>
+          </div>
+        </div>
+      </section>
+      <hr class="flux-native-settings-divider">
+
+      <section class="sg-section">
+        <div class="flux-native-settings-label sg-section-heading" role="heading" aria-level="2">Score</div>
+        <div class="flux-native-settings-group sg-settings-group">
+          <div class="flux-native-settings-row sg-settings-row" title="Choose the lower note on the left and the higher note on the right for generated scores. Import uses the source pitch range.">
+            <span class="flux-native-settings-label">Pitch Range</span>
+            <div class="flux-native-control-slot sg-range-slot">
+              <div id="sg-pitch-low-slot"></div>
+              <span class="sg-range-arrow" aria-hidden="true">→</span>
+              <div id="sg-pitch-high-slot"></div>
+            </div>
+          </div>
+          <hr class="flux-native-settings-divider">
+          <div class="flux-native-settings-row sg-settings-row" title="Higher values use denser, shorter rhythm patterns when the current layout has enough room. Generated scores only; ignored by Import.">
+            <label class="flux-native-settings-label" for="sg-rhythmDensity">Rhythm Density %</label>
+            <div class="flux-native-control-slot"><input id="sg-rhythmDensity" class="flux-input flux-number-input flux-native-compact-input" type="number" step="any"></div>
+          </div>
+          <hr class="flux-native-settings-divider">
+          <div class="flux-native-settings-row sg-settings-row" title="Percentage of generated events that become rests. Generated scores only; ignored by Import.">
+            <label class="flux-native-settings-label" for="sg-restDensity">Rest Amount %</label>
+            <div class="flux-native-control-slot"><input id="sg-restDensity" class="flux-input flux-number-input flux-native-compact-input" type="number" step="any"></div>
+          </div>
+          <hr class="flux-native-settings-divider">
+          <div class="flux-native-settings-row sg-settings-row" title="Allow generated pitches to use sharps and flats. Import preserves the source spelling.">
+            <label class="flux-native-settings-label" for="sg-accidentals">Allow generated accidentals</label>
+            <div class="flux-native-toggle-slot">
+              <label class="flux-toggle" aria-label="Allow generated accidentals">
+                <input id="sg-accidentals" class="flux-toggle-input" type="checkbox">
+                <span class="flux-toggle-track" aria-hidden="true"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </section>
+      <hr class="flux-native-settings-divider">
+
+      <section class="sg-section">
+        <div class="flux-native-settings-label sg-section-heading" role="heading" aria-level="2">Style</div>
+        <div class="flux-native-settings-group sg-settings-group">
+          <div class="flux-native-settings-row sg-settings-row" title="Scale the thickness of staff lines, stems, beams, barlines, and ledger lines together. Used by generated and imported scores.">
+            <label class="flux-native-settings-label" for="sg-globalThickness">Global Line Weight %</label>
+            <div class="flux-native-control-slot"><input id="sg-globalThickness" class="flux-input flux-number-input flux-native-compact-input" type="number" step="any"></div>
+          </div>
+        </div>
+      </section>
+      <div class="flux-native-action-row flux-native-action-row-spaced">
+        <button class="flux-button flux-native-action-button" type="button" data-action="reset">Reset</button>
+        <button class="flux-button flux-native-action-button" type="button" data-action="auto-adjust">Auto Adjust</button>
+        <button class="flux-button flux-native-action-button" type="button" data-action="randomize">Randomize</button>
+      </div>
+      <div class="flux-native-action-row flux-native-action-row-spaced">
+        <button class="flux-button flux-button-primary flux-native-action-button" type="button" data-action="generate">Generate</button>
+      </div>
+      <p id="sg-basic-status" class="flux-status sg-status" role="status" aria-live="polite">Loading settings...</p>
+    </section>
+
+    <section id="sg-tab-advanced" class="sg-tab-panel" role="tabpanel" hidden>
+      <section class="sg-section">
+        <div class="flux-native-settings-label sg-section-heading" role="heading" aria-level="2">Generation</div>
+        <div class="flux-native-settings-group sg-settings-group">
+          <div class="flux-native-settings-row sg-settings-row" title="Use the same seed and settings to reproduce the same generated score. Import uses the source timing and pitches.">
+            <label class="flux-native-settings-label" for="sg-masterSeed">Master Seed</label>
+            <div class="flux-native-control-slot"><input id="sg-masterSeed" class="flux-input flux-native-compact-input" type="text"></div>
+          </div>
+          <hr class="flux-native-settings-divider">
+          <div class="flux-native-settings-row sg-settings-row" title="0 favors smooth stepwise motion; 100 allows wider leaps. Generated scores only; ignored by Import.">
+            <label class="flux-native-settings-label" for="sg-melodyMotion">Melody Motion %</label>
+            <div class="flux-native-control-slot"><input id="sg-melodyMotion" class="flux-input flux-number-input flux-native-compact-input" type="number" step="any"></div>
+          </div>
+          <hr class="flux-native-settings-divider">
+          <div class="flux-native-settings-row sg-settings-row" title="Higher values favor repeating the same pitch. Generated scores only; ignored by Import.">
+            <label class="flux-native-settings-label" for="sg-repetitionTendency">Repetition %</label>
+            <div class="flux-native-control-slot"><input id="sg-repetitionTendency" class="flux-input flux-number-input flux-native-compact-input" type="number" step="any"></div>
+          </div>
+          <hr class="flux-native-settings-divider">
+          <div class="flux-native-settings-row sg-settings-row" title="Connect consecutive eighth and sixteenth notes in generated scores and MIDI imports. MusicXML beam metadata is preserved.">
+            <label class="flux-native-settings-label" for="sg-beam">Auto-beam generated / MIDI</label>
+            <div class="flux-native-toggle-slot">
+              <label class="flux-toggle" aria-label="Auto-beam generated / MIDI">
+                <input id="sg-beam" class="flux-toggle-input" type="checkbox">
+                <span class="flux-toggle-track" aria-hidden="true"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </section>
+      <hr class="flux-native-settings-divider">
+
+      <section class="sg-section">
+        <div class="flux-native-settings-label sg-section-heading" role="heading" aria-level="2">Layout / Scale</div>
+        <div class="flux-native-settings-group sg-settings-group">
+          <div class="flux-native-settings-row sg-settings-row" title="Horizontal position of the generated Shape Layer.">
+            <label class="flux-native-settings-label" for="sg-positionX">Position X (px)</label>
+            <div class="flux-native-control-slot"><input id="sg-positionX" class="flux-input flux-number-input flux-native-compact-input" type="number" step="any"></div>
+          </div>
+          <hr class="flux-native-settings-divider">
+          <div class="flux-native-settings-row sg-settings-row" title="Vertical position of the generated Shape Layer.">
+            <label class="flux-native-settings-label" for="sg-positionY">Position Y (px)</label>
+            <div class="flux-native-control-slot"><input id="sg-positionY" class="flux-input flux-number-input flux-native-compact-input" type="number" step="any"></div>
+          </div>
+          <hr class="flux-native-settings-divider">
+          <div class="flux-native-settings-row sg-settings-row" title="Overall scale of the generated Shape Layer.">
+            <label class="flux-native-settings-label" for="sg-overallScale">Overall Scale %</label>
+            <div class="flux-native-control-slot"><input id="sg-overallScale" class="flux-input flux-number-input flux-native-compact-input" type="number" step="any"></div>
+          </div>
+          <hr class="flux-native-settings-divider">
+          <div class="flux-native-settings-row sg-settings-row" title="Scale of noteheads and related stem and ledger placement.">
+            <label class="flux-native-settings-label" for="sg-noteScale">Note Scale %</label>
+            <div class="flux-native-control-slot"><input id="sg-noteScale" class="flux-input flux-number-input flux-native-compact-input" type="number" step="any"></div>
+          </div>
+          <hr class="flux-native-settings-divider">
+          <div class="flux-native-settings-row sg-settings-row" title="Scale of the clef, rests, accidentals, and time signature.">
+            <label class="flux-native-settings-label" for="sg-symbolScale">Symbol Scale %</label>
+            <div class="flux-native-control-slot"><input id="sg-symbolScale" class="flux-input flux-number-input flux-native-compact-input" type="number" step="any"></div>
+          </div>
+        </div>
+      </section>
+      <hr class="flux-native-settings-divider">
+
+      <section class="sg-section">
+        <div class="flux-native-settings-label sg-section-heading" role="heading" aria-level="2">Line Thickness</div>
+        <div class="flux-native-settings-group sg-settings-group">
+          <div class="flux-native-settings-row sg-settings-row" title="Base thickness of the five staff lines before Line Weight is applied.">
+            <label class="flux-native-settings-label" for="sg-staffLineThickness">Staff Line</label>
+            <div class="flux-native-control-slot"><input id="sg-staffLineThickness" class="flux-input flux-number-input flux-native-compact-input" type="number" step="any"></div>
+          </div>
+          <hr class="flux-native-settings-divider">
+          <div class="flux-native-settings-row sg-settings-row" title="Base note stem thickness.">
+            <label class="flux-native-settings-label" for="sg-stemThickness">Stem</label>
+            <div class="flux-native-control-slot"><input id="sg-stemThickness" class="flux-input flux-number-input flux-native-compact-input" type="number" step="any"></div>
+          </div>
+          <hr class="flux-native-settings-divider">
+          <div class="flux-native-settings-row sg-settings-row" title="Base beam thickness.">
+            <label class="flux-native-settings-label" for="sg-beamThickness">Beam</label>
+            <div class="flux-native-control-slot"><input id="sg-beamThickness" class="flux-input flux-number-input flux-native-compact-input" type="number" step="any"></div>
+          </div>
+          <hr class="flux-native-settings-divider">
+          <div class="flux-native-settings-row sg-settings-row" title="Base measure barline thickness.">
+            <label class="flux-native-settings-label" for="sg-barlineThickness">Barline</label>
+            <div class="flux-native-control-slot"><input id="sg-barlineThickness" class="flux-input flux-number-input flux-native-compact-input" type="number" step="any"></div>
+          </div>
+          <hr class="flux-native-settings-divider">
+          <div class="flux-native-settings-row sg-settings-row" title="Base ledger line thickness.">
+            <label class="flux-native-settings-label" for="sg-ledgerLineThickness">Ledger Line</label>
+            <div class="flux-native-control-slot"><input id="sg-ledgerLineThickness" class="flux-input flux-number-input flux-native-compact-input" type="number" step="any"></div>
+          </div>
+        </div>
+      </section>
+      <div class="flux-native-action-row flux-native-action-row-spaced">
+        <button class="flux-button flux-native-action-button" type="button" data-action="reset">Reset</button>
+        <button class="flux-button flux-native-action-button" type="button" data-action="auto-adjust">Auto Adjust</button>
+        <button class="flux-button flux-native-action-button" type="button" data-action="randomize">Randomize</button>
+      </div>
+      <div class="flux-native-action-row flux-native-action-row-spaced">
+        <button class="flux-button flux-button-primary flux-native-action-button" type="button" data-action="generate">Generate</button>
+      </div>
+      <p id="sg-advanced-status" class="flux-status sg-status" role="status" aria-live="polite">Loading settings...</p>
+    </section>
+
+    <section id="sg-tab-import" class="sg-tab-panel" role="tabpanel" hidden>
+      <section class="sg-section">
+        <div class="flux-native-settings-label sg-section-heading" role="heading" aria-level="2">MIDI / MusicXML Import</div>
+        <div class="flux-native-settings-group sg-settings-group">
+          <div class="flux-native-settings-row sg-settings-row">
+            <label class="flux-native-settings-label" for="sg-import-path">File</label>
+            <div class="sg-control-inline">
+              <input id="sg-import-path" class="flux-input" type="text" placeholder="Choose a file or enter a full path">
+              <button id="sg-import-browse" class="flux-button" type="button" data-action="browse">Browse...</button>
+            </div>
+          </div>
+          <hr class="flux-native-settings-divider">
+          <div class="flux-native-settings-row sg-settings-row">
+            <span id="sg-import-source-label" class="flux-native-settings-label">Source</span>
+            <div id="sg-import-source-slot" class="flux-native-control-slot"></div>
+          </div>
+        </div>
+        <p class="flux-description sg-import-info">Source notation is preserved. Imported measures, pitches, rhythms, and meter are not generated from Basic/Advanced settings.<br>Length may increase; Staff Space, Note Scale, and Symbol Scale may adjust to fit the Shape Layer.<br>Supports MIDI format 0/1 and uncompressed MusicXML: treble clef, numeric meters with denominator 2/4/8/16, meter changes between bars, one voice with simple chords, and whole to sixteenth including single-dotted values.</p>
+        <div class="flux-native-action-row flux-native-action-row-spaced">
+          <button id="sg-import-generate" class="flux-button flux-button-primary flux-native-action-button" type="button" data-action="import">Import &amp; Generate</button>
+        </div>
+        <p id="sg-import-status" class="flux-status sg-status" role="status" aria-live="polite">Ready</p>
+      </section>
+    </section>
+  </div>
+</div>

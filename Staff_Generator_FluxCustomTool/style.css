@@ -1,0 +1,142 @@
+.sg-panel {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* 縦並びの内容領域でセグメント行が余剰の高さを取らないようにする。 */
+.sg-panel > .sg-content > .sg-tabs {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  flex: 0 0 auto;
+  gap: 4px;
+  width: 100%;
+  max-width: 252px;
+  height: auto;
+  min-height: 0;
+  margin: 0 auto 10px;
+}
+
+/* セクション切替を標準的な横並びボタンにし、ラベルの折り返しを防ぐ。 */
+.sg-tabs > .flux-native-segment-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 80px;
+  max-width: calc((100% - 8px) / 3);
+  min-width: 0;
+  height: 26px;
+  min-height: 26px;
+  padding: 4px 6px;
+  flex: 0 1 80px;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.sg-tab-panel[hidden] {
+  display: none;
+}
+
+.sg-tab-panel {
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* グループ外の区切り線にも、設定行間と同じ上下の間隔を設ける。 */
+.sg-tab-panel > .flux-native-settings-divider {
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+
+.sg-content {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.sg-section {
+  margin-bottom: 0;
+}
+
+.sg-section-heading {
+  display: block;
+  margin: 0 0 6px;
+  font-weight: 600;
+}
+
+.sg-settings-group {
+  min-width: 0;
+}
+
+.sg-settings-row {
+  min-width: 0;
+}
+
+.sg-control-inline,
+.sg-range-slot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: auto;
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* ファイルパス欄はコンパクト枠を使わず、Browse ボタン以外の幅を使う。 */
+.sg-control-inline {
+  width: 100%;
+  flex: 1 1 0;
+}
+
+.sg-control-inline > .flux-button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.sg-range-slot {
+  box-sizing: border-box;
+  width: 240px;
+  max-width: 55%;
+  flex: 0 1 240px;
+}
+
+/* 音域の左右セレクターを同じ幅で縮め、行の外へ押し出さない。 */
+.sg-range-slot > div {
+  box-sizing: border-box;
+  width: 0;
+  max-width: 100%;
+  min-width: 0;
+  flex: 1 1 0;
+}
+
+.sg-control-inline .flux-input {
+  box-sizing: border-box;
+  width: 0;
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.sg-range-slot .flux-dropdown {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.sg-range-arrow {
+  flex: 0 0 auto;
+}
+
+.sg-import-info {
+  white-space: normal;
+  line-height: 1.45;
+}
+
+.sg-status {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

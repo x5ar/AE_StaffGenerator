@@ -1,0 +1,19 @@
+{
+  "manifestVersion": 1,
+  "apiVersion": 1,
+  "id": "com.koalavisual.staff-generator",
+  "name": "Staff Generator",
+  "version": "1.0.0",
+  "author": "KoalaVisual",
+  "description": "Generate and import musical staff notation as an After Effects Shape Layer.",
+  "minFluxVersion": "1.8.0",
+  "category": "custom",
+  "platforms": ["windows", "macos"],
+  "icon": "icon.svg",
+  "entry": {
+    "html": "panel.html",
+    "script": "main.js",
+    "style": "style.css",
+    "host": "StaffGenerator.jsx"
+  }
+}
