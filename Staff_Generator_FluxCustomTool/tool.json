@@ -6,7 +6,7 @@
   "version": "1.0.0",
   "author": "KoalaVisual",
   "description": "Generate and import musical staff notation as an After Effects Shape Layer.",
-  "minFluxVersion": "1.8.0",
+  "minFluxVersion": "1.8.1",
   "category": "custom",
   "platforms": ["windows", "macos"],
   "icon": "icon.svg",

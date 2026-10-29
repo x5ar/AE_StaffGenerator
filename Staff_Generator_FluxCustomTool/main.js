@@ -3,6 +3,7 @@ var tool = {
   mount: function (context) {
     var root = context.root;
     var sdk = context.FluxSDK;
+    var sessionKey = "ui-state-v1";
     var state = {
       config: null,
       activePresetId: "default",
@@ -10,9 +11,16 @@ var tool = {
       importDocument: null,
       importLaneIndex: -1,
       importPathText: "",
-      importLoadToken: 0
+      importLoadToken: 0,
+      savedSession: null,
+      sessionLoadError: null
     };
-    // 設定と読み込んだ譜面はパネルの実行中だけ保持し、永続化しない。
+    // 設定画面の状態はFlux HostのRAMに保存し、譜面データや一時処理状態は保存しない。
+    try {
+      state.savedSession = sdk.session.get(sessionKey);
+    } catch (error) {
+      state.sessionLoadError = error;
+    }
     var numericFieldIds = [
       "length", "staffSize", "staffLineThickness", "positionX", "positionY",
       "overallScale", "measures", "rhythmDensity", "restDensity", "melodyMotion",
@@ -177,6 +185,83 @@ var tool = {
       return settings;
     }
 
+    function getActiveTab() {
+      var buttons = root.querySelectorAll("[data-tab]");
+      var i;
+      for (i = 0; i < buttons.length; i += 1) {
+        if (buttons[i].getAttribute("aria-selected") === "true") {
+          return buttons[i].getAttribute("data-tab");
+        }
+      }
+      return "basic";
+    }
+
+    function hasChoice(choices, value, property) {
+      var i;
+      if (typeof value !== "string") { return false; }
+      for (i = 0; i < choices.length; i += 1) {
+        if (choices[i][property] === value) { return true; }
+      }
+      return false;
+    }
+
+    function isValidSession(snapshot, config) {
+      var settings;
+      var i;
+      var value;
+      if (!snapshot || typeof snapshot !== "object" || snapshot.version !== 1) { return false; }
+      if (snapshot.activeTab !== "basic" && snapshot.activeTab !== "advanced" && snapshot.activeTab !== "import") { return false; }
+      settings = snapshot.settings;
+      if (!settings || typeof settings !== "object" || Array.isArray(settings)) { return false; }
+      for (i = 0; i < numericFieldIds.length; i += 1) {
+        value = settings[numericFieldIds[i]];
+        if (typeof value !== "string" || value.length > 128) { return false; }
+      }
+      if (typeof settings.masterSeed !== "string" || settings.masterSeed.length > 256) { return false; }
+      if (typeof settings.beam !== "boolean" || typeof settings.accidentals !== "boolean") { return false; }
+      if (!hasChoice(config.pitchChoices, settings.pitchLowText, "value") ||
+          !hasChoice(config.pitchChoices, settings.pitchHighText, "value")) { return false; }
+      if (!hasChoice(config.presets, settings.presetId, "id")) { return false; }
+      return true;
+    }
+
+    function restoreSession(snapshot, config) {
+      var settings;
+      var i;
+      if (!isValidSession(snapshot, config)) { return false; }
+      settings = snapshot.settings;
+      state.suppressPresetTracking = true;
+      for (i = 0; i < numericFieldIds.length; i += 1) {
+        byId("sg-" + numericFieldIds[i]).value = settings[numericFieldIds[i]];
+      }
+      byId("sg-masterSeed").value = settings.masterSeed;
+      byId("sg-beam").checked = settings.beam;
+      byId("sg-accidentals").checked = settings.accidentals;
+      setDropdownValue("sg-pitch-low", settings.pitchLowText);
+      setDropdownValue("sg-pitch-high", settings.pitchHighText);
+      state.activePresetId = settings.presetId;
+      setDropdownValue("sg-preset", state.activePresetId);
+      state.suppressPresetTracking = false;
+      setActiveTab(snapshot.activeTab);
+      return true;
+    }
+
+    function saveSession() {
+      var saved;
+      if (!state.config) { return; }
+      try {
+        // 1 MiBのセッション枠を保てるよう、譜面本体や読み込み結果は含めない。
+        saved = sdk.session.set(sessionKey, {
+          version: 1,
+          activeTab: getActiveTab(),
+          settings: readSettings()
+        });
+        if (saved !== true) { throw new Error("Flux did not accept the session update."); }
+      } catch (error) {
+        setActionStatus("Could not save session state: " + getErrorMessage(error));
+      }
+    }
+
     function setActionStatus(message) {
       var basic = byId("sg-basic-status");
       var advanced = byId("sg-advanced-status");
@@ -229,6 +314,7 @@ var tool = {
       if (presetId === "custom") {
         state.activePresetId = "custom";
         setActionStatus("Custom selected.");
+        saveSession();
         return;
       }
       sdk.ae.call("applyPreset", {
@@ -237,6 +323,7 @@ var tool = {
       }).then(function (settings) {
         applySettings(settings);
         setActionStatus(presetId.charAt(0).toUpperCase() + presetId.substring(1) + " applied. Click Generate.");
+        saveSession();
       }).catch(function (error) {
         setDropdownValue("sg-preset", previousPresetId);
         state.activePresetId = previousPresetId;
@@ -438,6 +525,7 @@ var tool = {
       applySettings(state.config.defaults);
       state.activePresetId = "default";
       setActionStatus("Defaults restored. Click Generate.");
+      saveSession();
     }
 
     function autoAdjustSettings() {
@@ -447,6 +535,7 @@ var tool = {
         var message = result.changes.length ? "Auto Adjust complete. Review values." : "Current settings fit.";
         if (result.settings.numericInputsClamped) { message += " Inputs were clamped."; }
         setActionStatus(message + " Click Generate.");
+        saveSession();
       }).catch(function (error) {
         setActionStatus("Auto Adjust failed: " + getErrorMessage(error));
       });
@@ -457,6 +546,7 @@ var tool = {
       return sdk.ae.call("randomize", readSettings()).then(function (settings) {
         applySettings(settings);
         setActionStatus("Randomize complete. Click Generate.");
+        saveSession();
       }).catch(function (error) {
         setActionStatus("Randomize failed: " + getErrorMessage(error));
       });
@@ -464,6 +554,7 @@ var tool = {
 
     function generateStaff() {
       setActionStatus("Generating...");
+      saveSession();
       return sdk.ae.call("generate", readSettings()).then(function (result) {
         var message = "Generated: " + result.measureCount + " measures / 1 Shape Layer";
         if (result.layoutAdjusted) {
@@ -479,6 +570,7 @@ var tool = {
       var pathText = byId("sg-import-path").value;
       var loaded;
       setImportStatus("Importing score...");
+      saveSession();
       if (state.importDocument && state.importPathText === pathText) {
         loaded = Promise.resolve(state.importDocument);
       } else {
@@ -521,6 +613,7 @@ var tool = {
       var actionButton = findDataElement(event, "data-action");
       if (tabButton) {
         setActiveTab(tabButton.getAttribute("data-tab"));
+        saveSession();
         return;
       }
       if (actionButton) {
@@ -537,9 +630,10 @@ var tool = {
       for (i = 0; i < customPresetFields.length; i += 1) {
         if (fieldName === customPresetFields[i]) {
           markPresetCustom();
-          return;
+          break;
         }
       }
+      saveSession();
     }
     sdk.runtime.listen(root, "input", handleCustomFieldChange);
     sdk.runtime.listen(root, "change", function (event) {
@@ -593,7 +687,8 @@ var tool = {
         "sg-pitch-low-label",
         "Lower pitch",
         pitchItems,
-        config.defaults.pitchLowText
+        config.defaults.pitchLowText,
+        function () { saveSession(); }
       );
       makeDropdown(
         "sg-pitch-high-slot",
@@ -604,10 +699,12 @@ var tool = {
         "sg-pitch-high-label",
         "Higher pitch",
         pitchItems,
-        config.defaults.pitchHighText
+        config.defaults.pitchHighText,
+        function () { saveSession(); }
       );
       applySettings(config.defaults);
-      setActionStatus("Ready");
+      if (state.savedSession) { restoreSession(state.savedSession, config); }
+      setActionStatus(state.sessionLoadError ? "Could not restore session state: " + getErrorMessage(state.sessionLoadError) : "Ready");
     }).catch(function (error) {
       setActionStatus("Could not load settings: " + getErrorMessage(error));
     });
